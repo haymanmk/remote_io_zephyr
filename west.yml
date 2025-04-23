@@ -1,0 +1,7 @@
+manifest:
+  projects:
+    - name: mender-mcu
+      url: https://github.com/mendersoftware/mender-mcu
+      revision: main
+      path: modules/mender-mcu
+      import: true
