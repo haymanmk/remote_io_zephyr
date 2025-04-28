@@ -9,8 +9,14 @@ set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/nucleo_f767zi_firmware.
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(remote_io_zephyr)
 
+target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
+
 # Sources
-file(GLOB_RECURSE app_sources src/*.c)
+# file(GLOB_RECURSE app_sources src/*.c)
+file(GLOB_RECURSE app_sources
+    src/api.c
+    src/ethernet_if.c
+    src/main.c)
 target_sources(app PRIVATE ${app_sources})
 
 # Generate Root CA include files

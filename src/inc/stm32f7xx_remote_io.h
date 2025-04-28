@@ -13,16 +13,6 @@ enum Channel {
     CHANNEL_1 = 1,
 };
 
-// UART
-// Please do not modify the enum values manually,
-// it is related to the counting of the maximum number of UARTs
-// and the index in UART handle array.
-typedef enum {
-    UART_1,
-    UART_2,
-    UART_MAX,
-} uart_index_t;
-
 
 #include <stdio.h>
 #include <stdint.h>

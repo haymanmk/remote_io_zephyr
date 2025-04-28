@@ -1,4 +1,4 @@
-#include "inc/ethernet_if.h"
+#include "ethernet_if.h"
 
 int main(void) {
     tcp_server_init();

@@ -1,7 +1,7 @@
 #ifndef __SETTINGS_H
 #define __SETTINGS_H
 
-#include "stm32f7xx_remote_io.h"
+#include "uart.h"
 
 // flags for instructing restoring function to restore settings
 #define SETTINGS_RESTORE_DEFAULTS (1 << 0)
@@ -33,15 +33,6 @@ typedef struct EthernetSettings
     uint8_t mac_address_5;
     uint8_t tcp_port;
 } ethernet_settings_t;
-
-typedef struct UARTSettings
-{
-    uint32_t baudrate;
-    uint32_t data_bits;
-    uint32_t stop_bits;
-    uint32_t parity;
-    uint32_t flow_control; // under development
-} uart_settings_t;
 
 typedef struct PWMWS288XX_Settings
 {
@@ -81,6 +72,6 @@ extern settings_t settings;
 
 /* Export functions */
 void settings_init();
-io_status_t settings_save();
+int settings_save();
 
 #endif

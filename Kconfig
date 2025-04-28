@@ -1,0 +1,12 @@
+mainmenu "Remote I/O Config"
+
+    config REMOTEIO_MINIMAL_STACK_SIZE
+        int "Remote I/O minimal stack size"
+        range 0 1024
+        default 128
+        help
+            Minimal stack size for the Remote I/O task.
+            This is the minimum stack size required for the task to run.
+            The actual stack size may be larger depending on the task's requirements.
+
+source "Kconfig.zephyr"

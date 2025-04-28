@@ -1,8 +1,6 @@
 #ifndef __API_H
 #define __API_H
 
-#include "stm32f7xx_remote_io.h"
-
 #define MAX_INT_DIGITS 10 // please take into consideration the maximum number of digits for int32_t
 
 #define API_RX_BUFFER_SIZE 128 // 1 ~ 254

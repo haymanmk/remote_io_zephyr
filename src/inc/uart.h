@@ -9,6 +9,16 @@
 
 /* Type definition */
 
+// UART
+// Please do not modify the enum values manually,
+// it is related to the counting of the maximum number of UARTs
+// and the index in UART handle array.
+typedef enum {
+    UART_1,
+    UART_2,
+    UART_MAX,
+} uart_index_t;
+
 typedef struct {
     UART_HandleTypeDef *huart;
     uint8_t rx_buffer[UART_RX_BUFFER_SIZE];
@@ -17,6 +27,15 @@ typedef struct {
     uint8_t is_new_line;
     uint8_t control_flags;
 } uart_handle_t;
+
+typedef struct UARTSettings
+{
+    uint32_t baudrate;
+    uint32_t data_bits;
+    uint32_t stop_bits;
+    uint32_t parity;
+    uint32_t flow_control; // under development
+} uart_settings_t;
 
 /* Macros */
 // get uart handle from HAL uart handle
@@ -37,6 +56,6 @@ typedef struct {
 /* Function prototypes */
 void uart_init();
 void uart_msp_init(uart_index_t uart_index, UART_HandleTypeDef *huart, uart_settings_t *uart_settings);
-io_status_t uart_printf(uart_index_t uart_index, const uint8_t *data, uint8_t len);
+int uart_printf(uart_index_t uart_index, const uint8_t *data, uint8_t len);
 
 #endif

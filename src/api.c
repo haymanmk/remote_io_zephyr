@@ -1,4 +1,4 @@
-#include "stm32f7xx_remote_io.h"
+#include <zephyr/kernel.h>
 
 #define PARAM_STR_MAX_LENGTH    MAX_INT_DIGITS+2 // 1 for sign, 1 for null terminator
 
@@ -19,7 +19,7 @@
 
 
 // function prototypes
-void api_task(void *parameters);
+void api_task(void *p1, void *p2, void *p3);
 token_t* api_create_token();
 void api_free_tokens(token_t* token);
 void api_reset_command_line();
@@ -28,6 +28,16 @@ void api_execute_command();
 void api_error(uint16_t error_code);
 
 // API task handle
+K_THREAD_DEFINE(apiTaskHandle,
+                CONFIG_REMOTEIO_MINIMAL_STACK_SIZE * 2,
+                api_task,
+                NULL,
+                NULL,
+                NULL,
+                tskIDLE_PRIORITY + 1,
+                0,
+                0);
+
 TaskHandle_t apiTaskHandle;
 extern TaskHandle_t processTxTaskHandle;
 
@@ -62,7 +72,7 @@ void api_init()
     xTaskCreate(api_task, "API Task", configMINIMAL_STACK_SIZE * 2, NULL, tskIDLE_PRIORITY+1, &apiTaskHandle);
 }
 
-void api_task(void *parameters)
+void api_task(void *p1, void *p2, void *p3)
 {
     for (;;)
     {
