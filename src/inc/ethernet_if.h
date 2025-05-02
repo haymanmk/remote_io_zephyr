@@ -53,6 +53,12 @@
 struct ethernet_if_socket_service {
         struct zsock_pollfd poll_fds;
         const struct net_socket_service_desc *service;
+        char *rx_buffer;
+        uint8_t rx_buffer_head;
+        uint8_t rx_buffer_tail;
+        char *tx_buffer;
+        uint8_t tx_buffer_head;
+        uint8_t tx_buffer_tail;
 };
 
 /* Function prototypes */

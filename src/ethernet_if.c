@@ -113,6 +113,7 @@ static void receive_data(struct net_socket_service_event *pev,
         LOG_INF("Connection to %s closed", inet_ntoa(addr.sin_addr));
     } else {
         LOG_INF("Received message: %.*s", rev_len, buf);
+        api_append_to_rx_ring_buffer(buf, rev_len);
     }
 }
 
@@ -277,6 +278,24 @@ static struct ethernet_if_socket_service *register_client_at_socket_service(int 
         if (socket_service_table[i]->poll_fds.fd == -1){
             service = socket_service_table[i];
             service->poll_fds.fd = client; // mark it as registered
+            service->rx_buffer = malloc(MAX_RCV_BUFFER_SIZE);
+            if (service->rx_buffer == NULL) {
+                LOG_ERR("Failed to allocate memory for socket service RX buffer");
+                k_mutex_unlock(&lock);
+                return NULL;
+            }
+            service->rx_buffer_head = 0;
+            service->rx_buffer_tail = 0;
+            service->tx_buffer = malloc(MAX_RCV_BUFFER_SIZE);
+            if (service->tx_buffer == NULL) {
+                LOG_ERR("Failed to allocate memory for socket service TX buffer");
+                free(service->rx_buffer);
+                service->rx_buffer = NULL;
+                k_mutex_unlock(&lock);
+                return NULL;
+            }
+            service->tx_buffer_head = 0;
+            service->tx_buffer_tail = 0;
             break;
         }
     }
@@ -284,6 +303,34 @@ static struct ethernet_if_socket_service *register_client_at_socket_service(int 
     // unlock the mutex
     k_mutex_unlock(&lock);
     return service;
+}
+
+static void reset_socket_service(struct ethernet_if_socket_service *service)
+{
+    if (service == NULL) {
+        return;
+    }
+    // reset the socket service
+    service->poll_fds.fd = -1; // mark it as unregistered
+    service->poll_fds.events = 0;
+    service->poll_fds.revents = 0;
+    // free RX buffer
+    if (service->rx_buffer != NULL) {
+        free(service->rx_buffer);
+        service->rx_buffer = NULL;
+    }
+    // free TX buffer
+    if (service->tx_buffer != NULL) {
+        free(service->tx_buffer);
+        service->tx_buffer = NULL;
+    }
+    // reset the buffer pointers
+    service->rx_buffer_head = 0;
+    service->rx_buffer_tail = 0;
+    service->tx_buffer_head = 0;
+    service->tx_buffer_tail = 0;
+
+    return;
 }
 
 /**
@@ -306,9 +353,7 @@ static int unregister_client_at_socket_service(int client)
                 break;
             }
             // reset the socket service
-            socket_service_table[i]->poll_fds.fd = -1; // mark it as unregistered
-            socket_service_table[i]->poll_fds.events = 0;
-            socket_service_table[i]->poll_fds.revents = 0;
+            reset_socket_service(socket_service_table[i]);
             ret = 0;
             break;
         }
@@ -336,7 +381,9 @@ static int unregister_all_clients_at_socket_service(void)
             zsock_close(client);
             LOG_INF("Closed client socket: %d", client);
 
-            socket_service_table[i]->poll_fds.fd = -1; // mark it as unregistered
+            // reset the socket service
+            reset_socket_service(socket_service_table[i]);
+
             // unregister the socket service
             ret = net_socket_service_unregister(socket_service_table[i]->service);
             if (ret < 0) {

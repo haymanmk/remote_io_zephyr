@@ -1,4 +1,6 @@
 #include <zephyr/kernel.h>
+#include "stm32f7xx_remote_io.h"
+#include "ethernet_if.h"
 
 #define PARAM_STR_MAX_LENGTH    MAX_INT_DIGITS+2 // 1 for sign, 1 for null terminator
 
@@ -38,18 +40,17 @@ K_THREAD_DEFINE(apiTaskHandle,
                 0,
                 0);
 
-TaskHandle_t apiTaskHandle;
 extern TaskHandle_t processTxTaskHandle;
 
 // ring buffer for received data
-static char rxBuffer[API_RX_BUFFER_SIZE];
-static uint8_t rxBufferHead = 0;
-static uint8_t rxBufferTail = 0;
+// static char rxBuffer[API_RX_BUFFER_SIZE];
+// static uint8_t rxBufferHead = 0;
+// static uint8_t rxBufferTail = 0;
 
 // ring buffer for sending data
-static char txBuffer[API_TX_BUFFER_SIZE];
-static uint8_t txBufferHead = 0;
-static uint8_t txBufferTail = 0;
+// static char txBuffer[API_TX_BUFFER_SIZE];
+// static uint8_t txBufferHead = 0;
+// static uint8_t txBufferTail = 0;
 
 static command_line_t commandLine = {0}; // store command line data
 static char anyTypeBuffer[UART_TX_BUFFER_SIZE] = {'\0'}; // store data for ANY type

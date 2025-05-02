@@ -23,19 +23,8 @@ enum Channel {
 
 #include "main.h"
 #include "error_code.h"
-#include "cpu_map.h"
 #include "utils.h"
-#include "freertos.h"
-#include "flash.h"
-#include "settings.h"
-#include "ethernet_if.h"
-#include "ws28xx_pwm.h"
-#include "uart.h"
-#include "digital_input.h"
-#include "digital_output.h"
 #include "system_info.h"
-#include "api.h"
-#include "uart.h"
 
 
 /* Exported functions */
