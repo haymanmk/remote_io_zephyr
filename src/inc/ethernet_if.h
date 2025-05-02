@@ -3,6 +3,7 @@
 
 #include <zephyr/net/socket_service.h>
 #include <zephyr/net/socket_poll.h>
+#include "utils.h"
 
 #define MAX_POLLABLE_SOCKETS 6
 #define TCP_SERVICE_NAME tcp_service
@@ -53,12 +54,10 @@
 struct ethernet_if_socket_service {
         struct zsock_pollfd poll_fds;
         const struct net_socket_service_desc *service;
-        char *rx_buffer;
-        uint8_t rx_buffer_head;
-        uint8_t rx_buffer_tail;
-        char *tx_buffer;
-        uint8_t tx_buffer_head;
-        uint8_t tx_buffer_tail;
+        // rx ring buffer
+        struct UtilsRingBuffer rx_buffer;
+        // tx ring buffer
+        struct UtilsRingBuffer tx_buffer;
 };
 
 /* Function prototypes */

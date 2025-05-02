@@ -40,6 +40,9 @@ K_THREAD_DEFINE(apiTaskHandle,
                 0,
                 0);
 
+// event for receiving new data
+K_EVENT_DEFINE(newDataEvent);
+
 extern TaskHandle_t processTxTaskHandle;
 
 // ring buffer for received data

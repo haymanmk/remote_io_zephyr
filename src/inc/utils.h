@@ -4,6 +4,15 @@
 #define true 1
 #define false 0
 
+/* Type definitions */
+// Ring buffer
+typedef struct UtilsRingBuffer {
+    char *buffer; // buffer pointer
+    uint8_t head; // head index
+    uint8_t tail; // tail index
+    uint8_t size; // buffer size
+} utils_ring_buffer_t;
+
 /* Macros */
 #define UTILS_INCREMENT_BUFFER_HEAD(HEAD, TAIL, SIZE) \
     do { \
@@ -32,5 +41,11 @@
 
 /* Function prototypes */
 uint8_t utils_read_float(char *line, uint8_t *char_counter, float *float_ptr);
+io_status_t utils_increment_buffer_head(utils_ring_buffer_t *buffer);
+io_status_t utils_increment_buffer_tail(utils_ring_buffer_t *buffer);
+io_status_t utils_is_buffer_empty(utils_ring_buffer_t *buffer);
+io_status_t utils_is_buffer_full(utils_ring_buffer_t *buffer);
+io_status_t utils_append_to_buffer(utils_ring_buffer_t *buffer, char *data, uint8_t len);
+io_status_t utils_pop_from_buffer(utils_ring_buffer_t *buffer, char *data);
 
 #endif

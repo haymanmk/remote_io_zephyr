@@ -20,8 +20,9 @@ LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_DBG);
 // extern settings_t settings;
 
 
-#define MAX_RCV_BUFFER_SIZE 1024
-#define POLLABLE_SOCKETS 5
+#define MAX_RX_BUFFER_SIZE 1024
+#define MAX_TX_BUFFER_SIZE 1024
+#define POLLABLE_SOCKETS 1 // only one socket service
 
 #if defined(CONFIG_NET_MAX_CONTEXTS)
 /* POLLABLE_SOCKETS must be less than CONFIG_NET_MAX_CONTEXTS */
@@ -48,12 +49,14 @@ TCP_SERV_DEFINE_N(tcp_service_handler, POLLABLE_SOCKETS);
 // define a table to hold the socket services
 static struct ethernet_if_socket_service *socket_service_table[POLLABLE_SOCKETS];
 
+// event for receiving new data
+extern struct k_event newDataEvent;
 
 /* Functions */
 
 static void tcp_service_handler(struct net_socket_service_event *pev)
 {
-    static char buf[MAX_RCV_BUFFER_SIZE];
+    static char buf[MAX_RX_BUFFER_SIZE];
 
     receive_data(pev, buf, sizeof(buf));
 }
@@ -113,10 +116,14 @@ static void receive_data(struct net_socket_service_event *pev,
         LOG_INF("Connection to %s closed", inet_ntoa(addr.sin_addr));
     } else {
         LOG_INF("Received message: %.*s", rev_len, buf);
-        api_append_to_rx_ring_buffer(buf, rev_len);
+        // append the received data to the rx buffer
+        utils_append_to_buffer(&socket_service_table[0]->rx_buffer, buf, rev_len);
     }
 }
 
+/**
+ * @brief Register a client at a socket service
+ */
 int tcp_server_init(void)
 {
     int ret = 0;
@@ -263,6 +270,63 @@ exit:
     return ret;
 }
 
+static void reset_socket_service(struct ethernet_if_socket_service *service)
+{
+    if (service == NULL) {
+        return;
+    }
+    // reset the socket service
+    service->poll_fds.fd = -1; // mark it as unregistered
+    service->poll_fds.events = 0;
+    service->poll_fds.revents = 0;
+    // free RX buffer
+    if (service->rx_buffer.buffer != NULL) {
+        free(service->rx_buffer.buffer);
+        service->rx_buffer.buffer = NULL;
+    }
+    // free TX buffer
+    if (service->tx_buffer.buffer != NULL) {
+        free(service->tx_buffer.buffer);
+        service->tx_buffer.buffer = NULL;
+    }
+    // reset the buffer pointers
+    service->rx_buffer.head = 0;
+    service->rx_buffer.tail = 0;
+    service->rx_buffer.size = 0;
+    service->tx_buffer.head = 0;
+    service->tx_buffer.tail = 0;
+    service->tx_buffer.size = 0;
+
+    return;
+}
+
+static int intialize_socket_service(struct ethernet_if_socket_service *service)
+{
+    if (service == NULL) {
+        return -1;
+    }
+    // reset the socket service
+    reset_socket_service(service);
+
+    // allocate memory for RX buffer
+    service->rx_buffer.buffer = malloc(MAX_RX_BUFFER_SIZE);
+    if (service->rx_buffer.buffer == NULL) {
+        LOG_ERR("Failed to allocate memory for RX buffer");
+        return -1;
+    }
+    service->rx_buffer.size = MAX_RX_BUFFER_SIZE;
+
+    // allocate memory for TX buffer
+    service->tx_buffer.buffer = malloc(MAX_TX_BUFFER_SIZE);
+    if (service->tx_buffer.buffer == NULL) {
+        LOG_ERR("Failed to allocate memory for TX buffer");
+        free(service->rx_buffer.buffer);
+        service->rx_buffer.buffer = NULL;
+        return -1;
+    }
+    service->tx_buffer.size = MAX_TX_BUFFER_SIZE;
+}
+
 /**
  * @brief   register a client at a socket service atomically
  * @param   client  the client socket to register
@@ -277,61 +341,23 @@ static struct ethernet_if_socket_service *register_client_at_socket_service(int 
     for (int i = 0; i < POLLABLE_SOCKETS; i++) {
         if (socket_service_table[i]->poll_fds.fd == -1){
             service = socket_service_table[i];
+            // initialize the socket service
+            if (intialize_socket_service(service) < 0) {
+                LOG_ERR("Failed to initialize socket service");
+                service = NULL;
+                goto exit;
+            }
             service->poll_fds.fd = client; // mark it as registered
-            service->rx_buffer = malloc(MAX_RCV_BUFFER_SIZE);
-            if (service->rx_buffer == NULL) {
-                LOG_ERR("Failed to allocate memory for socket service RX buffer");
-                k_mutex_unlock(&lock);
-                return NULL;
-            }
-            service->rx_buffer_head = 0;
-            service->rx_buffer_tail = 0;
-            service->tx_buffer = malloc(MAX_RCV_BUFFER_SIZE);
-            if (service->tx_buffer == NULL) {
-                LOG_ERR("Failed to allocate memory for socket service TX buffer");
-                free(service->rx_buffer);
-                service->rx_buffer = NULL;
-                k_mutex_unlock(&lock);
-                return NULL;
-            }
-            service->tx_buffer_head = 0;
-            service->tx_buffer_tail = 0;
             break;
         }
     }
 
+exit:
     // unlock the mutex
     k_mutex_unlock(&lock);
     return service;
 }
 
-static void reset_socket_service(struct ethernet_if_socket_service *service)
-{
-    if (service == NULL) {
-        return;
-    }
-    // reset the socket service
-    service->poll_fds.fd = -1; // mark it as unregistered
-    service->poll_fds.events = 0;
-    service->poll_fds.revents = 0;
-    // free RX buffer
-    if (service->rx_buffer != NULL) {
-        free(service->rx_buffer);
-        service->rx_buffer = NULL;
-    }
-    // free TX buffer
-    if (service->tx_buffer != NULL) {
-        free(service->tx_buffer);
-        service->tx_buffer = NULL;
-    }
-    // reset the buffer pointers
-    service->rx_buffer_head = 0;
-    service->rx_buffer_tail = 0;
-    service->tx_buffer_head = 0;
-    service->tx_buffer_tail = 0;
-
-    return;
-}
 
 /**
  * @brief   unregister a client at a socket service atomically
