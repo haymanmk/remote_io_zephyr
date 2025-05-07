@@ -64,14 +64,14 @@ uint8_t utils_read_float(char *line, uint8_t *char_counter, float *float_ptr)
 	// expected range of E0 to E-4.
 	if (fval != 0) {
 		while (exp <= -2) {
-			fval *= 0.01;
+			fval *= (float)0.01;
 			exp += 2;
 		}
 		if (exp < 0) {
-			fval *= 0.1;
+			fval *= (float)0.1;
 		} else if (exp > 0) {
 			do {
-				fval *= 10.0;
+				fval *= (float)10.0;
 			} while (--exp > 0);
 		}
 	}

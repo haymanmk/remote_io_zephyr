@@ -24,8 +24,9 @@ enum Channel {
 #include "main.h"
 #include "error_code.h"
 #include "utils.h"
-#include "system_info.h"
+#include "cpu_map.h"
 
+#define MAX_INT_DIGITS 10 // please take into consideration the maximum number of digits for int32_t
 
 /* Exported functions */
 

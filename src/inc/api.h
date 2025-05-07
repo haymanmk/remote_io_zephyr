@@ -1,11 +1,6 @@
 #ifndef __API_H
 #define __API_H
 
-#define MAX_INT_DIGITS 10 // please take into consideration the maximum number of digits for int32_t
-
-#define API_RX_BUFFER_SIZE 128 // 1 ~ 254
-#define API_TX_BUFFER_SIZE 128 // 1 ~ 254
-#define API_ERROR_BUFFER_SIZE API_TX_BUFFER_SIZE // 1 ~ 254
 
 // Service ID
 #define SERVICE_ID_STATUS 1
@@ -43,27 +38,36 @@ enum {
     PARAM_TYPE_ANY,
 };
 
+// new data events
+#define API_EVENT_SERV_0 0x01
+#define API_EVENT_SERV_1 0x02
+#define API_EVENT_SERV_2 0x04
+#define API_EVENT_SERV_3 0x08
+#define API_EVENT_SERV_4 0x10
+#define API_EVENT_SERV_5 0x20
+
 /* Macros */
 // remove all the blank spaces when processing the command
-#define API_REMOVE_BLANK_SPACES() \
+#define API_REMOVE_BLANK_SPACES(SERV) \
     do { \
-        while (rxBufferHead != rxBufferTail && rxBuffer[rxBufferTail] == ' ') { \
-            api_increment_rx_buffer_tail_or_wait(); \
+        while (((SERV)->rx_buffer->head != (SERV)->rx_buffer->tail) \
+                && (SERV)->rx_buffer->buffer[(SERV)->rx_buffer->tail] == ' ') { \
+            api_increment_rx_buffer_tail_or_wait((SERV)->rx_buffer, (SERV)->event); \
         } \
     } while (0)
 
 // wait until rx buffer is not empty
-#define API_WAIT_UNTIL_BUFFER_NOT_EMPTY() \
+#define API_WAIT_UNTIL_BUFFER_NOT_EMPTY(SERV, EVENT_POINTER) \
     do { \
-        while (api_is_rx_buffer_empty() == STATUS_OK) { \
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY); \
+        while (utils_is_buffer_empty((SERV)->rx_buffer) == STATUS_OK) { \
+            k_event_wait((EVENT_POINTER), (SERV)->event, true, K_FOREVER); \
         } \
     } while (0)
 
 // default response to client
-#define API_DEFAULT_RESPONSE() \
+#define API_DEFAULT_RESPONSE(SERV, CMD_TYPE, CMD_ID) \
     do { \
-        api_printf("%c%d OK\r\n", commandLine.type, commandLine.id); \
+        ethernet_if_send((SERV), "%c%d OK\r\n", (CMD_TYPE), (CMD_ID)); \
     } while (0)
 
 
@@ -86,23 +90,12 @@ typedef struct {
     uint16_t id; // command id
     uint16_t variant; // command variant
     token_t *token; // parameters
+    token_t *last_token; // last token, the end of the linked list
 } command_line_t;
 
 /* Function prototypes */
 void api_init();
-io_status_t api_append_to_rx_ring_buffer(char *data, BaseType_t len);
-io_status_t api_append_to_tx_ring_buffer(char *data, BaseType_t len);
-io_status_t api_append_to_tx_ring_buffer_until_term(char *data, char terminator);
-io_status_t api_increment_rx_buffer_head();
-io_status_t api_increment_rx_buffer_tail();
-void api_increment_rx_buffer_tail_or_wait();
-io_status_t api_is_rx_buffer_empty();
-io_status_t api_is_rx_buffer_full();
-io_status_t api_increment_tx_buffer_head();
-io_status_t api_increment_tx_buffer_tail();
-char api_pop_tx_buffer();
-io_status_t api_is_tx_buffer_empty();
-io_status_t api_is_tx_buffer_full();
-io_status_t api_printf(const char *format_string, ...);
+void api_task(void *p1, void *p2, void *p3);
+void api_increment_rx_buffer_tail_or_wait(utils_ring_buffer_t *ring_buf, uint32_t event);
 
 #endif

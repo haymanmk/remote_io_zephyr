@@ -1,3 +1,6 @@
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(uart, LOG_LEVEL_DBG);
+
 #include "stm32f7xx_remote_io.h"
 
 // UART parameter handle
@@ -70,19 +73,19 @@ void uart_process_rx_task(void *parameters)
         uint8_t tail = uartHandle->rx_tail;
 
         // print prefix beforehand; format: "R<Service ID>.<UART index> "
-        api_printf("R%d.%d ", SERVICE_ID_SERIAL, uartIndex);
+        ethernet_if_send(service, "R%d.%d ", SERVICE_ID_SERIAL, uartIndex);
 
         // append the received data to the tx buffer
         while (head != tail)
         {
             if (api_append_to_tx_ring_buffer((char*)&(uartHandle->rx_buffer[tail]), 1) != STATUS_OK)
             {
-                vLoggingPrintf("Failed to append to tx buffer\n");
+                LOG_ERR("Failed to append to tx buffer\n");
             }
 
             if (uart_increment_rx_buffer_tail(uartHandle) != STATUS_OK)
             {
-                vLoggingPrintf("Failed to increment rx buffer tail\n");
+                LOG_ERR("Failed to increment rx buffer tail\n");
             }
 
             tail = uartHandle->rx_tail;
@@ -116,13 +119,13 @@ io_status_t uart_printf(uart_index_t uart_index, const uint8_t *data, uint8_t le
     UART_HandleTypeDef *huart = uartHandles[uart_index].huart;
 
     // debug print
-    vLoggingPrintf("UART%d: ", uart_index);
+    LOG_DBG("UART%d: ", uart_index);
     for (uint8_t i = 0; i < len; i++)
     {
-        vLoggingPrintf("%x ", data[i]);
+        LOG_DBG("%x ", data[i]);
     }
     // debug print new line
-    vLoggingPrintf("\r\n");
+    LOG_DBG("\r\n");
 
     // transmit the data
     if (HAL_UART_Transmit(huart, data, len, HAL_MAX_DELAY) != HAL_OK)

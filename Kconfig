@@ -8,5 +8,22 @@ mainmenu "Remote I/O Config"
             Minimal stack size for the Remote I/O task.
             This is the minimum stack size required for the task to run.
             The actual stack size may be larger depending on the task's requirements.
+    
+    config REMOTEIO_SERVICE_STACK_SIZE
+        int "Remote I/O service stack size"
+        range 0 2048
+        default 256
+        help
+            Stack size for the Remote I/O service task.
+            This is the stack size required for the task to run.
+            The actual stack size may be larger depending on the task's requirements.
+
+    config REMOTEIO_SERVICE_PRIORITY
+        int "Remote I/O service task priority"
+        default 7
+        help
+            Priority of the Remote I/O service task.
+            The lower the number, the higher the priority.
+            The actual priority may be affected by other tasks in the system.
 
 source "Kconfig.zephyr"

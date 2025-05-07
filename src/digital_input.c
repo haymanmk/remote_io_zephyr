@@ -89,7 +89,7 @@ void digital_input_task(void* parameters)
                 input->state = state;
 
                 // Notify clients with the format: "S<Service ID> <Input Index> <State>"
-                api_printf("S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, current->index, state);
+                ethernet_if_send(service, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, current->index, state);
             }
             current = current->next;
         }
@@ -237,11 +237,11 @@ void digital_input_print_subscribed_inputs()
     node_subscribed_inputs_t* current = headNodeSubscribedInputs;
     while (current != NULL)
     {
-        api_printf("%d", current->index);
+        ethernet_if_send(service, "%d", current->index);
         current = current->next;
         if (current != NULL)
         {
-            api_printf(" ");
+            ethernet_if_send(service, " ");
         }
     }
 }

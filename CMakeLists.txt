@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 # Kconfig options
+set(KCONFIG_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Kconfig")
 
 # Device tree overlay file
 set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/nucleo_f767zi_firmware.overlay")
@@ -14,8 +15,10 @@ target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 # Sources
 # file(GLOB_RECURSE app_sources src/*.c)
 file(GLOB_RECURSE app_sources
+    src/utils.c
     src/api.c
     src/ethernet_if.c
+    src/system_info.c
     src/main.c)
 target_sources(app PRIVATE ${app_sources})
 

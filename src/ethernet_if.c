@@ -12,6 +12,7 @@ LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_DBG);
 #include <zephyr/posix/poll.h>
 #include <zephyr/posix/sys/socket.h>
 #include <zephyr/posix/arpa/inet.h>
+#include <zephyr/debug/thread_analyzer.h>
 
 #include "settings.h"
 #include "ethernet_if.h"
@@ -20,9 +21,9 @@ LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_DBG);
 // extern settings_t settings;
 
 
-#define MAX_RX_BUFFER_SIZE 1024
-#define MAX_TX_BUFFER_SIZE 1024
-#define POLLABLE_SOCKETS 1 // only one socket service
+#define MAX_RX_BUFFER_SIZE 128
+#define MAX_TX_BUFFER_SIZE 128
+#define POLLABLE_SOCKETS 2 // only one socket service
 
 #if defined(CONFIG_NET_MAX_CONTEXTS)
 /* POLLABLE_SOCKETS must be less than CONFIG_NET_MAX_CONTEXTS */
@@ -33,24 +34,27 @@ _Static_assert(POLLABLE_SOCKETS < CONFIG_NET_MAX_CONTEXTS,
 /* Local function prototypes */
 static void receive_data(struct net_socket_service_event *pev, char *buf, size_t buf_len);
 static void tcp_service_handler(struct net_socket_service_event *pev);
-static struct ethernet_if_socket_service *register_client_at_socket_service(int client);
+static int create_socket_service_thread(ethernet_if_socket_service_t *service);
+static int destroy_socket_service_thread(ethernet_if_socket_service_t *service);
+static ethernet_if_socket_service_t *register_client_at_socket_service(int client);
 static int unregister_client_at_socket_service(int client);
 static int unregister_all_clients_at_socket_service(void);
 
 
 // define the locking mechanism
 static K_MUTEX_DEFINE(lock);
+static K_MUTEX_DEFINE(lock_sock_send);
 
 static char addr_str[INET_ADDRSTRLEN];
 
 // Define socket services
 TCP_SERV_DEFINE_N(tcp_service_handler, POLLABLE_SOCKETS);
 
-// define a table to hold the socket services
-static struct ethernet_if_socket_service *socket_service_table[POLLABLE_SOCKETS];
+// define a table to hold the socket services which are managed locally
+static ethernet_if_socket_service_t *socket_service_table[POLLABLE_SOCKETS];
 
 // event for receiving new data
-extern struct k_event newDataEvent;
+extern struct k_event apiNewDataEvent;
 
 /* Functions */
 
@@ -61,7 +65,7 @@ static void tcp_service_handler(struct net_socket_service_event *pev)
     receive_data(pev, buf, sizeof(buf));
 }
 
-static const struct net_socket_service_desc *get_socket_service(int index)
+static const struct net_socket_service_desc *get_net_socket_service(int index)
 {
     if (index < 0 || index >= POLLABLE_SOCKETS) {
         return NULL;
@@ -87,6 +91,21 @@ static const struct net_socket_service_desc *get_socket_service(int index)
     }
 }
 
+/**
+ * @brief Get ethernet_if_socket_service via client
+ * @param client The client socket
+ * @return Pointer to the ethernet_if_socket_service structure
+ */
+static ethernet_if_socket_service_t *get_eth_socket_service_via_client(int client)
+{
+    for (int i = 0; i < POLLABLE_SOCKETS; i++) {
+        if (socket_service_table[i]->poll_fds.fd == client) {
+            return socket_service_table[i];
+        }
+    }
+    return NULL;
+}
+
 static void receive_data(struct net_socket_service_event *pev,
             char *buf, size_t buf_len)
 {
@@ -95,6 +114,8 @@ static void receive_data(struct net_socket_service_event *pev,
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
     int rev_len;
+    // get the socket service
+    ethernet_if_socket_service_t *service = get_eth_socket_service_via_client(client);
 
     rev_len = zsock_recvfrom(client, buf, buf_len, 0,
             (struct sockaddr *)&addr, &addr_len);
@@ -111,13 +132,21 @@ static void receive_data(struct net_socket_service_event *pev,
             LOG_ERR("Failed to unregister socket service: %d", ret);
         }
 
+        // destroy the socket service thread
+        destroy_socket_service_thread(service);
         // close the socket
         zsock_close(client);
         LOG_INF("Connection to %s closed", inet_ntoa(addr.sin_addr));
     } else {
         LOG_INF("Received message: %.*s", rev_len, buf);
+        if (service == NULL) {
+            LOG_ERR("Failed to get socket service");
+            return;
+        }
         // append the received data to the rx buffer
-        utils_append_to_buffer(&socket_service_table[0]->rx_buffer, buf, rev_len);
+        utils_append_to_buffer(service->rx_buffer, buf, rev_len);
+        // send event to notify the API task to process the data
+        k_event_post(&apiNewDataEvent, service->event);
     }
 }
 
@@ -145,13 +174,23 @@ int tcp_server_init(void)
 
     // initialize the socket service table
     for (int i = 0; i < POLLABLE_SOCKETS; i++) {
-        struct ethernet_if_socket_service *service = malloc(sizeof(struct ethernet_if_socket_service));
+        ethernet_if_socket_service_t *service = malloc(sizeof(ethernet_if_socket_service_t));
+        // reset the socket service
+        memset(service, 0, sizeof(ethernet_if_socket_service_t));
         if (service == NULL) {
             LOG_ERR("Failed to allocate memory for socket service");
             return -ENOMEM;
         }
         service->poll_fds.fd = -1; // initially invalid
-        service->service = get_socket_service(i);
+        service->service = get_net_socket_service(i);
+        service->rx_buffer = malloc(sizeof(struct UtilsRingBuffer));
+        if (service->rx_buffer == NULL) {
+            LOG_ERR("Failed to allocate memory for rx buffer");
+            free(service);
+            return -ENOMEM;
+        }
+        memset(service->rx_buffer, 0, sizeof(struct UtilsRingBuffer));
+        service->event = GET_NEW_DATA_EVENT(i);
         // add the service to the table
         socket_service_table[i] = service;
     }
@@ -218,6 +257,7 @@ int tcp_server_init(void)
     while(1) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);
+        thread_analyzer_print(0);
         int client = zsock_accept(sock, (struct sockaddr *)&client_addr, &addr_len);
         if (client < 0) {
             LOG_ERR("Failed to accept connection: %d", -errno);
@@ -229,9 +269,10 @@ int tcp_server_init(void)
         LOG_INF("Accepted connection #%d from %s (%d)", counter, addr_str, client);
 
         // Register the client socket at a socket service
-        struct ethernet_if_socket_service *service = register_client_at_socket_service(client);
+        ethernet_if_socket_service_t *service = register_client_at_socket_service(client);
         if (service == NULL) {
             LOG_ERR("Failed to register client at socket service");
+            thread_analyzer_print(0);
             zsock_close(client);
             continue;
         }
@@ -245,12 +286,21 @@ int tcp_server_init(void)
             continue;
         }
 
+        // create a thread for the socket service
+        ret = create_socket_service_thread(service);
+        if (ret < 0) {
+            LOG_ERR("Failed to create socket service thread: %d", ret);
+            unregister_client_at_socket_service(client);
+            zsock_close(client);
+            continue;
+        }
         // send welcome message to the client
-        const char *welcome_msg = "Welcome to the server\r\n";
-        ret = zsock_send(client, welcome_msg, strlen(welcome_msg), 0);
+        const char *welcome_msg = "Welcome to Remote I/O!\r\n";
+        ret = ethernet_if_send(service, "%s", welcome_msg);
         if (ret < 0) {
             LOG_ERR("Failed to send welcome message: %d", -errno);
             unregister_client_at_socket_service(client);
+            destroy_socket_service_thread(service);
             zsock_close(client);
             continue;
         }
@@ -270,7 +320,7 @@ exit:
     return ret;
 }
 
-static void reset_socket_service(struct ethernet_if_socket_service *service)
+static void reset_socket_service(ethernet_if_socket_service_t *service)
 {
     if (service == NULL) {
         return;
@@ -280,27 +330,19 @@ static void reset_socket_service(struct ethernet_if_socket_service *service)
     service->poll_fds.events = 0;
     service->poll_fds.revents = 0;
     // free RX buffer
-    if (service->rx_buffer.buffer != NULL) {
-        free(service->rx_buffer.buffer);
-        service->rx_buffer.buffer = NULL;
-    }
-    // free TX buffer
-    if (service->tx_buffer.buffer != NULL) {
-        free(service->tx_buffer.buffer);
-        service->tx_buffer.buffer = NULL;
+    if (service->rx_buffer->buffer != NULL) {
+        free(service->rx_buffer->buffer);
+        service->rx_buffer->buffer = NULL;
     }
     // reset the buffer pointers
-    service->rx_buffer.head = 0;
-    service->rx_buffer.tail = 0;
-    service->rx_buffer.size = 0;
-    service->tx_buffer.head = 0;
-    service->tx_buffer.tail = 0;
-    service->tx_buffer.size = 0;
+    service->rx_buffer->head = 0;
+    service->rx_buffer->tail = 0;
+    service->rx_buffer->size = 0;
 
     return;
 }
 
-static int intialize_socket_service(struct ethernet_if_socket_service *service)
+static int intialize_socket_service(ethernet_if_socket_service_t *service)
 {
     if (service == NULL) {
         return -1;
@@ -309,22 +351,58 @@ static int intialize_socket_service(struct ethernet_if_socket_service *service)
     reset_socket_service(service);
 
     // allocate memory for RX buffer
-    service->rx_buffer.buffer = malloc(MAX_RX_BUFFER_SIZE);
-    if (service->rx_buffer.buffer == NULL) {
+    service->rx_buffer->buffer = malloc(MAX_RX_BUFFER_SIZE);
+    if (service->rx_buffer->buffer == NULL) {
         LOG_ERR("Failed to allocate memory for RX buffer");
         return -1;
     }
-    service->rx_buffer.size = MAX_RX_BUFFER_SIZE;
+    service->rx_buffer->size = MAX_RX_BUFFER_SIZE;
 
-    // allocate memory for TX buffer
-    service->tx_buffer.buffer = malloc(MAX_TX_BUFFER_SIZE);
-    if (service->tx_buffer.buffer == NULL) {
-        LOG_ERR("Failed to allocate memory for TX buffer");
-        free(service->rx_buffer.buffer);
-        service->rx_buffer.buffer = NULL;
+    return 0;
+}
+
+static int create_socket_service_thread(ethernet_if_socket_service_t *service)
+{
+    if (service == NULL) {
         return -1;
     }
-    service->tx_buffer.size = MAX_TX_BUFFER_SIZE;
+    
+    // allocate memory for the thread stack
+    service->stack = k_thread_stack_alloc(
+        CONFIG_REMOTEIO_SERVICE_STACK_SIZE, 0);
+    if (service->stack == NULL) {
+        LOG_ERR("Failed to allocate memory for thread stack");
+        return -1;
+    }
+    // crate the thread
+    service->thread_id = k_thread_create(
+        &service->thread,
+        service->stack,
+        CONFIG_REMOTEIO_SERVICE_STACK_SIZE,
+        api_task,
+        service,
+        NULL,
+        NULL,
+        CONFIG_REMOTEIO_SERVICE_PRIORITY,
+        0, K_NO_WAIT);
+    // set the thread name
+    k_thread_name_set(service->thread_id, "socket_service_thread");
+    
+    return 0;
+}
+
+static int destroy_socket_service_thread(ethernet_if_socket_service_t *service)
+{
+    if (service == NULL) {
+        return -1;
+    }
+    // delete the thread
+    k_thread_abort(service->thread_id);
+    // free the thread stack
+    k_thread_stack_free(service->stack);
+    service->stack = NULL;
+
+    return 0;
 }
 
 /**
@@ -332,9 +410,9 @@ static int intialize_socket_service(struct ethernet_if_socket_service *service)
  * @param   client  the client socket to register
  * @return  pointer to the socket service on success, NULL on failure
  */
-static struct ethernet_if_socket_service *register_client_at_socket_service(int client)
+static ethernet_if_socket_service_t *register_client_at_socket_service(int client)
 {
-    struct ethernet_if_socket_service *service = NULL;
+    ethernet_if_socket_service_t *service = NULL;
     // lock the mutex
     k_mutex_lock(&lock, K_FOREVER);
     // retrieve the first available socket service from table
@@ -423,5 +501,36 @@ static int unregister_all_clients_at_socket_service(void)
     // unlock the mutex
     k_mutex_unlock(&lock);
 
+    return ret;
+}
+
+int ethernet_if_send(ethernet_if_socket_service_t *service, const char *format_string, ...)
+{
+    if (service == NULL) {
+        return -1;
+    }
+
+    char buffer[MAX_TX_BUFFER_SIZE] = {'\0'};
+    va_list args;
+    va_start(args, format_string);
+    vsnprintf(buffer, sizeof(buffer), format_string, args);
+    va_end(args);
+
+    // lock the mutex
+    k_mutex_lock(&lock_sock_send, K_FOREVER);
+
+    // send data to the client
+    int ret = zsock_send(service->poll_fds.fd, buffer, strlen(buffer), 0);
+    if (ret < 0) {
+        LOG_ERR("Failed to send data: %d", -errno);
+        ret = -1;
+        goto exit;
+    }
+
+    LOG_INF("Sent data: %s", buffer);
+
+exit:
+    // unlock the mutex
+    k_mutex_unlock(&lock_sock_send);
     return ret;
 }

@@ -50,17 +50,35 @@
 #define TCP_SERV_DEFINE_N(SERV_HANDLER, N) \
         _CONCAT(TCP_SERV_DEFINE_, N)(SERV_HANDLER)
 
+// get new data event
+#define GET_NEW_DATA_EVENT(INDX) \
+        INDX == 0 ? API_EVENT_SERV_0 : \
+        INDX == 1 ? API_EVENT_SERV_1 : \
+        INDX == 2 ? API_EVENT_SERV_2 : \
+        INDX == 3 ? API_EVENT_SERV_3 : \
+        INDX == 4 ? API_EVENT_SERV_4 : \
+        INDX == 5 ? API_EVENT_SERV_5 : \
+        0
+
 // define a struct to hold socket service information
-struct ethernet_if_socket_service {
+typedef struct ethernet_if_socket_service {
         struct zsock_pollfd poll_fds;
         const struct net_socket_service_desc *service;
         // rx ring buffer
-        struct UtilsRingBuffer rx_buffer;
-        // tx ring buffer
-        struct UtilsRingBuffer tx_buffer;
-};
+        struct UtilsRingBuffer *rx_buffer;
+        // pointer to the thread that is processing the socket service
+        struct k_thread thread;
+        // thread id
+        k_tid_t thread_id;
+        // pointer to the stack of the thread
+        k_thread_stack_t *stack;
+        // event for receiving new data
+        uint32_t event;
+} ethernet_if_socket_service_t;
+
 
 /* Function prototypes */
 int tcp_server_init();
+int ethernet_if_send(ethernet_if_socket_service_t *service, const char *format_string, ...);
 
 #endif // __ETHERNET_IF_H__
