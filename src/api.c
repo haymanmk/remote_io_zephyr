@@ -526,7 +526,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
             if (command_line->token == NULL ||
                 command_line->token->value_type != PARAM_TYPE_INT32 ||
                 command_line->token->i32 == 0 ||
-                command_line->token->i32 >= DIGITAL_INPUT_MAX)
+                command_line->token->i32 > DIGITAL_INPUT_MAX)
             {
                 error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
                 break;
@@ -570,7 +570,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     //             // check if parameter is valid
     //             if (token->value_type != PARAM_TYPE_INT32 ||
     //             token->i32 == 0 ||
-    //             token->i32 >= DIGITAL_INPUT_MAX)
+    //             token->i32 > DIGITAL_INPUT_MAX)
     //             {
     //                 error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
     //                 break;
@@ -612,7 +612,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     //             // check if parameter is valid
     //             if (token->value_type != PARAM_TYPE_INT32 ||
     //             token->i32 == 0 ||
-    //             token->i32 >= DIGITAL_INPUT_MAX)
+    //             token->i32 > DIGITAL_INPUT_MAX)
     //             {
     //                 error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
     //                 break;

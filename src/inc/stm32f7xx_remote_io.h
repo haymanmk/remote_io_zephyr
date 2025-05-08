@@ -27,6 +27,8 @@ enum Channel {
 #include "cpu_map.h"
 
 #define MAX_INT_DIGITS 10 // please take into consideration the maximum number of digits for int32_t
+#define DIGITAL_INPUT_MAX 16 // maximum number of digital inputs
+#define DIGITAL_OUTPUT_MAX 16 // maximum number of digital outputs
 
 /* Exported functions */
 

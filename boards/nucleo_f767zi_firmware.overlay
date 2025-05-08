@@ -1,5 +1,27 @@
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
 / {
     chosen {
         zephyr,code-partition = &slot0_partition;
+    };
+
+    user_inputs {
+        compatible = "gpio-keys";
+        usr_in_1: user_input_1 {
+            gpios = <&gpioe 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
+        usr_in_2: user_input_2 {
+            gpios = <&gpioe 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
+        usr_in_3: user_input_3 {
+            gpios = <&gpioe 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
+        usr_in_4: user_input_4 {
+            gpios = <&gpioe 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
+        usr_in_5: user_input_5 {
+            gpios = <&gpioe 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
     };
 };
