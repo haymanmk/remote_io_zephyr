@@ -4,183 +4,162 @@ LOG_MODULE_REGISTER(digital_input, LOG_LEVEL_DBG);
 #include <zephyr/kernel.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/util_macro.h>
 
 #include "stm32f7xx_remote_io.h"
+#include "digital_input.h"
 
-/* Define Input Node ID */
-#define IN_1    DT_NODELABEL(usr_in_1)
-#define IN_2    DT_NODELABEL(usr_in_2)
-#define IN_3    DT_NODELABEL(usr_in_3)
-#define IN_4    DT_NODELABEL(usr_in_4)
-#define IN_5    DT_NODELABEL(usr_in_5)
-#define IN_6    DT_NODELABEL(usr_in_6)
-#define IN_7    DT_NODELABEL(usr_in_7)
-#define IN_8    DT_NODELABEL(usr_in_8)
-#define IN_9    DT_NODELABEL(usr_in_9)
-#define IN_10   DT_NODELABEL(usr_in_10)
-#define IN_11   DT_NODELABEL(usr_in_11)
-#define IN_12   DT_NODELABEL(usr_in_12)
-#define IN_13   DT_NODELABEL(usr_in_13)
-#define IN_14   DT_NODELABEL(usr_in_14)
-#define IN_15   DT_NODELABEL(usr_in_15)
-#define IN_16   DT_NODELABEL(usr_in_16)
-
-#define DIGITAL_INPUT_UPDATE_INTERVAL 10 // ms
+#define DIGITAL_INPUT_UPDATE_INTERVAL 1 // ms
 
 /* type definition */
-typedef struct NodeSubscribedInputs
-{
-    uint8_t index;
-    struct NodeSubscribedInputs* next;
+typedef struct Node {
+	struct Node *next;
+} node_t;
+
+typedef struct ServiceNode {
+	struct ServiceNode *next;
+	callback_fn_t *cb;
+    void *user_data;
+} service_node_t;
+
+typedef struct NodeSubscribedInputs {
+	struct NodeSubscribedInputs *next;
+	uint8_t index;
+	service_node_t *services; // linked list of services
 } node_subscribed_inputs_t;
 
 /* private functions */
-void digital_input_task(void* parameters);
-struct gpio_dt_spec* digital_input_get_gpio_spec(uint8_t index);
-node_subscribed_inputs_t* digital_input_create_node(uint8_t index);
-void digital_input_delete_node(node_subscribed_inputs_t* node);
-void digital_input_append_node(node_subscribed_inputs_t* node);
-void digital_input_remove_node(node_subscribed_inputs_t* node);
+void digital_input_task(void *parameters);
+struct gpio_dt_spec *digital_input_get_gpio_spec(uint8_t index);
+void digital_input_delete_node(node_t *node);
+void digital_input_append_node(node_t *node, node_t *head);
+void digital_input_remove_node(node_t *node, node_t *head);
 
 /* variables */
 // get gpio spec
-static const struct gpio_dt_spec digital_input_1 = GPIO_DT_SPEC_GET(IN_1, gpios);
-static const struct gpio_dt_spec digital_input_2 = GPIO_DT_SPEC_GET(IN_2, gpios);
-static const struct gpio_dt_spec digital_input_3 = GPIO_DT_SPEC_GET(IN_3, gpios);
-static const struct gpio_dt_spec digital_input_4 = GPIO_DT_SPEC_GET(IN_4, gpios);
-static const struct gpio_dt_spec digital_input_5 = GPIO_DT_SPEC_GET(IN_5, gpios);
-static const struct gpio_dt_spec digital_input_6 = GPIO_DT_SPEC_GET(IN_6, gpios);
-static const struct gpio_dt_spec digital_input_7 = GPIO_DT_SPEC_GET(IN_7, gpios);
-static const struct gpio_dt_spec digital_input_8 = GPIO_DT_SPEC_GET(IN_8, gpios);
-static const struct gpio_dt_spec digital_input_9 = GPIO_DT_SPEC_GET(IN_9, gpios);
-static const struct gpio_dt_spec digital_input_10 = GPIO_DT_SPEC_GET(IN_10, gpios);
-static const struct gpio_dt_spec digital_input_11 = GPIO_DT_SPEC_GET(IN_11, gpios);
-static const struct gpio_dt_spec digital_input_12 = GPIO_DT_SPEC_GET(IN_12, gpios);
-static const struct gpio_dt_spec digital_input_13 = GPIO_DT_SPEC_GET(IN_13, gpios);
-static const struct gpio_dt_spec digital_input_14 = GPIO_DT_SPEC_GET(IN_14, gpios);
-static const struct gpio_dt_spec digital_input_15 = GPIO_DT_SPEC_GET(IN_15, gpios);
-static const struct gpio_dt_spec digital_input_16 = GPIO_DT_SPEC_GET(IN_16, gpios);
+#define GET_GPIO_SPEC(id)                                                                          \
+	static const struct gpio_dt_spec digital_input_##id =                                      \
+		GPIO_DT_SPEC_GET(DT_NODELABEL(usr_in_##id), gpios)
+// listify the GPIO spec
+LISTIFY(DIGITAL_INPUT_MAX, GET_GPIO_SPEC, (;));
 
 TaskHandle_t digitalInputTaskHandle = NULL;
-node_subscribed_inputs_t* headNodeSubscribedInputs = NULL;
-node_subscribed_inputs_t* tailNodeSubscribedInputs = NULL;
+node_subscribed_inputs_t *headNodeSubscribedInputs = NULL;
+
+// used by listify
+#define NOT_DEVICE_IS_READY(id)  !device_is_ready(digital_input_##id.port)
+#define CONFIG_GPIO_AS_INPUT(id) gpio_pin_configure_dt(&digital_input_##id, GPIO_INPUT) < 0
 
 io_status_t digital_input_init()
 {
-    // check if the GPIO is valid
-    if (!device_is_ready(digital_input_1.port) || !device_is_ready(digital_input_2.port) ||
-        !device_is_ready(digital_input_3.port) || !device_is_ready(digital_input_4.port) ||
-        !device_is_ready(digital_input_5.port) || !device_is_ready(digital_input_6.port) ||
-        !device_is_ready(digital_input_7.port) || !device_is_ready(digital_input_8.port) ||
-        !device_is_ready(digital_input_9.port) || !device_is_ready(digital_input_10.port) ||
-        !device_is_ready(digital_input_11.port) || !device_is_ready(digital_input_12.port) ||
-        !device_is_ready(digital_input_13.port) || !device_is_ready(digital_input_14.port) ||
-        !device_is_ready(digital_input_15.port) || !device_is_ready(digital_input_16.port))
-    {
-        LOG_ERR("Digital input GPIO is not ready");
-        return STATUS_ERROR;
-    }
+	// check if the GPIO is valid
+	/**
+	    if (!device_is_ready(digital_input_0.port) || !device_is_ready(digital_input_1.port) ||
+		!device_is_ready(digital_input_2.port) || !device_is_ready(digital_input_3.port) ||
+		...
+		!device_is_ready(digital_input_12.port) || !device_is_ready(digital_input_13.port)
+	   || !device_is_ready(digital_input_14.port) || !device_is_ready(digital_input_15.port))
+	 */
+	if (LISTIFY(DIGITAL_INPUT_MAX, NOT_DEVICE_IS_READY, (||))) {
+		LOG_ERR("Digital input GPIO is not ready");
+		return STATUS_ERROR;
+	}
 
-    // configure the GPIO pins as input
-    if (gpio_pin_configure_dt(&digital_input_1, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_2, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_3, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_4, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_5, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_6, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_7, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_8, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_9, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_10, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_11, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_12, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_13, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_14, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_15, GPIO_INPUT) < 0 ||
-    gpio_pin_configure_dt(&digital_input_16, GPIO_INPUT) < 0)
-    {
-        LOG_ERR("Failed to configure digital input GPIO");
-        return STATUS_ERROR;
-    }
+	// configure the GPIO pins as input
+	/**
+	    if (gpio_pin_configure_dt(&digital_input_0, GPIO_INPUT) < 0 ||
+		gpio_pin_configure_dt(&digital_input_1, GPIO_INPUT) < 0 ||
+		gpio_pin_configure_dt(&digital_input_2, GPIO_INPUT) < 0 ||
+		...
+		gpio_pin_configure_dt(&digital_input_14, GPIO_INPUT) < 0 ||
+		gpio_pin_configure_dt(&digital_input_15, GPIO_INPUT) < 0)
+	 */
+	if (LISTIFY(DIGITAL_INPUT_MAX, CONFIG_GPIO_AS_INPUT, (||))) {
+		LOG_ERR("Failed to configure digital input GPIO");
+		return STATUS_ERROR;
+	}
 
-    return STATUS_OK;
+	return STATUS_OK;
 }
 
 // task for monitoring subscribed digital inputs
-void digital_input_task(void* parameters)
+void digital_input_task(void *parameters)
 {
-    for (;;)
-    {
-        // check if there is a subscribed digital input
-        if (headNodeSubscribedInputs == NULL)
-        {
-            // wait for new subscription
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        }
+	for (;;) {
+		// check if there is a subscribed digital input
+		if (headNodeSubscribedInputs == NULL) {
+			// wait for new subscription
+			ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		}
 
-        // check the state of the subscribed digital inputs
-        node_subscribed_inputs_t* current = headNodeSubscribedInputs;
-        bool state = false;
-        digital_input_t* input = NULL;
+		// check the state of the subscribed digital inputs
+		node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+		bool state = false;
+		digital_input_t *input = NULL;
 
-        while (current != NULL)
-        {
-            // read the state of the digital input
-            state = digital_input_read(current->index);
-            input = digital_input_instance(current->index);
+		while (current != NULL) {
+			// read the state of the digital input
+			state = digital_input_read(current->index);
+			input = digital_input_instance(current->index);
 
-            // check if the state has changed
-            if (state != input->state)
-            {
-                // update the state
-                input->state = state;
+			// check if the state has changed
+			if (state != input->state) {
+				// update the state
+				input->state = state;
 
-                // Notify clients with the format: "S<Service ID> <Input Index> <State>"
-                ethernet_if_send(service, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, current->index, state);
-            }
-            current = current->next;
-        }
+				// Notify clients with the format: "S<Service ID> <Input Index>
+				// <State>"
+                /**
+                 * TODO: check if this code segment is correct
+                 */
+                // execute the callback function with user data and results
+                service_node_t *service_current = current->services;
+                while (service_current != NULL) {
+                    service_current->cb(service_current->user_data, current->index, state);
+                    service_current = service_current->next;
+                }
 
-        // delay few milliseconds
-        vTaskDelay(pdMS_TO_TICKS(DIGITAL_INPUT_UPDATE_INTERVAL));
-    }
+			}
+			current = current->next;
+		}
+
+		// delay few milliseconds
+		vTaskDelay(pdMS_TO_TICKS(DIGITAL_INPUT_UPDATE_INTERVAL));
+	}
 }
 
-struct gpio_dt_spec* digital_input_get_gpio_spec(uint8_t index)
+// used by listify
+#define CASE_GPIO_SPEC(id)                                                                         \
+	case id:                                                                                   \
+		return &digital_input_##id
+
+struct gpio_dt_spec *digital_input_get_gpio_spec(uint8_t index)
 {
-    switch (index)
-    {
-        case 1: return &digital_input_1;
-        case 2: return &digital_input_2;
-        case 3: return &digital_input_3;
-        case 4: return &digital_input_4;
-        case 5: return &digital_input_5;
-        case 6: return &digital_input_6;
-        case 7: return &digital_input_7;
-        case 8: return &digital_input_8;
-        case 9: return &digital_input_9;
-        case 10: return &digital_input_10;
-        case 11: return &digital_input_11;
-        case 12: return &digital_input_12;
-        case 13: return &digital_input_13;
-        case 14: return &digital_input_14;
-        case 15: return &digital_input_15;
-        case 16: return &digital_input_16;
-        default: return (struct gpio_dt_spec*){0};
-    }
+	switch (index) {
+		/**
+		 * case 0: return &digital_input_0;
+		 * case 1: return &digital_input_1;
+		 * case 2: return &digital_input_2;
+		 * ...
+		 * case 14: return &digital_input_14;
+		 * case 15: return &digital_input_15;
+		 */
+		LISTIFY(DIGITAL_INPUT_MAX, CASE_GPIO_SPEC, (;));
+	default:
+		return (struct gpio_dt_spec *){0};
+	}
 }
 
 // read the state of a digital input specified by the index
 bool digital_input_read(uint8_t index)
 {
-    int ret = gpio_pin_get_dt(digital_input_get_gpio_spec(index));
+	int ret = gpio_pin_get_dt(digital_input_get_gpio_spec(index));
 
-    if (ret < 0)
-    {
-        LOG_ERR("Failed to read digital input %d", index);
-        return false;
-    }
-    return (bool)ret; // 1/active, 0/inactive
+	if (ret < 0) {
+		LOG_ERR("Failed to read digital input %d", index);
+		return false;
+	}
+	return (bool)ret; // 1/active, 0/inactive
 }
 
 /**
@@ -191,149 +170,173 @@ bool digital_input_read(uint8_t index)
  */
 uint32_t digital_input_read_all()
 {
-    uint32_t data = 0;
-    for (uint8_t i = 1; i <= DIGITAL_INPUT_MAX; i++)
-    {
-        data |= (digital_input_read(i) << (i - 1));
-    }
-    return data;
+	uint32_t data = 0;
+	for (uint8_t i = 0; i < DIGITAL_INPUT_MAX; i++) {
+		data |= (digital_input_read(i) << (i));
+	}
+	return data;
 }
 
 // subscribe to a digital input specified by the index
 // to create an event-driven feature for clients.
-void digital_input_subscribe(uint8_t index)
+void digital_input_subscribe(void *user_data, uint8_t index, callback_fn_t *callback)
 {
-    // make sure the index is valid
-    if (index > DIGITAL_INPUT_MAX)
-    {
+	// make sure the index is valid
+	if (index >= DIGITAL_INPUT_MAX) {
+		return;
+	}
+
+	// check if it is already subscribed
+	node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+	while (current != NULL) {
+		if (current->index == index) {
+            // check if the service is already registered
+            service_node_t *service_current = current->services;
+            while (service_current != NULL) {
+                if (service_current == user_data) {
+                    // service is already registered
+                    return;
+                }
+                service_current = service_current->next;
+            }
+            // create a new service node
+            service_node_t *new_service_node = (service_node_t *)malloc(sizeof(service_node_t));
+            if (new_service_node == NULL) {
+                LOG_ERR("Failed to allocate memory for service node");
+                return;
+            }
+            new_service_node->cb = callback;
+            new_service_node->user_data = user_data;
+            new_service_node->next = NULL;
+            // add the service node to the linked list
+            if (current->services == NULL) {
+                current->services = new_service_node;
+            } else {
+                digital_input_append_node((node_t*)new_service_node, (node_t*)current->services);
+            }
+			return;
+		}
+		current = current->next;
+	}
+
+	// create a node for the subscribed digital input
+	node_subscribed_inputs_t *newNode = (node_subscribed_inputs_t*)malloc(sizeof(node_subscribed_inputs_t));
+    if (newNode == NULL) {
+        LOG_ERR("Failed to allocate memory for subscribed digital input node");
         return;
     }
-
-    // check if it is already subscribed
-    node_subscribed_inputs_t* current = headNodeSubscribedInputs;
-    while (current != NULL)
-    {
-        if (current->index == index)
-        {
-            return;
-        }
-        current = current->next;
+    newNode->index = index;
+    newNode->next = NULL;
+    newNode->services = NULL;
+    // create a new service node
+    service_node_t *new_service_node = (service_node_t *)malloc(sizeof(service_node_t));
+    if (new_service_node == NULL) {
+        LOG_ERR("Failed to allocate memory for service node");
+        free(newNode);
+        return;
+    }
+    new_service_node->cb = callback;
+    new_service_node->user_data = user_data;
+    new_service_node->next = NULL;
+    // add the service node to the linked list
+    newNode->services = new_service_node;
+    // check if the head node is NULL
+    if (headNodeSubscribedInputs == NULL) {
+        headNodeSubscribedInputs = newNode;
+    } else {
+        // append the new node to the end of the list
+        digital_input_append_node((node_t*)newNode, (node_t*)headNodeSubscribedInputs);
     }
 
-    // create a node for the subscribed digital input
-    node_subscribed_inputs_t* newNode = digital_input_create_node(index);
+    // check if the task is already created
+    /**
+     * TODO: check if the task is already created
+     */
+	// update input state
+	digital_input_t *input = digital_input_instance(index);
+	input->state = digital_input_read(index);
 
-    // add the node to the linked list
-    digital_input_append_node(newNode);
-
-    // update input state
-    digital_input_t* input = digital_input_instance(index);
-    input->state = digital_input_read(index);
-
-    // give a notification to the task
-    xTaskNotifyGive(digitalInputTaskHandle);
+	// give a notification to the task
+	xTaskNotifyGive(digitalInputTaskHandle);
 }
 
 void digital_input_unsubscribe(uint8_t index)
 {
-    // make sure the index is valid
-    if (index > DIGITAL_INPUT_MAX)
-    {
-        return;
-    }
+	// make sure the index is valid
+	if (index >= DIGITAL_INPUT_MAX) {
+		return;
+	}
 
-    // check if it is already subscribed
-    node_subscribed_inputs_t* current = headNodeSubscribedInputs;
-    while (current != NULL)
-    {
-        if (current->index == index)
-        {
-            digital_input_remove_node(current);
-            digital_input_delete_node(current);
-            return;
-        }
-        current = current->next;
-    }
+	// check if it is already subscribed
+	node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+	while (current != NULL) {
+		if (current->index == index) {
+			digital_input_remove_node(current);
+			digital_input_delete_node(current);
+			return;
+		}
+		current = current->next;
+	}
 }
 
 // print current subscribed digital inputs
-// note: this function only prints the index of the subscribed digital inputs with a space as the delimiter.
+// note: this function only prints the index of the subscribed digital inputs with a space as the
+// delimiter.
 void digital_input_print_subscribed_inputs()
 {
-    node_subscribed_inputs_t* current = headNodeSubscribedInputs;
-    while (current != NULL)
-    {
-        ethernet_if_send(service, "%d", current->index);
-        current = current->next;
-        if (current != NULL)
-        {
-            ethernet_if_send(service, " ");
-        }
-    }
-}
-
-// create a node for the subscribed digital input
-node_subscribed_inputs_t* digital_input_create_node(uint8_t index)
-{
-    node_subscribed_inputs_t* newNode = (node_subscribed_inputs_t*)pvPortMalloc(sizeof(node_subscribed_inputs_t));
-    newNode->index = index;
-    newNode->next = NULL;
-    return newNode;
+	node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+	while (current != NULL) {
+		ethernet_if_send(service, "%d", current->index);
+		current = current->next;
+		if (current != NULL) {
+			ethernet_if_send(service, " ");
+		}
+	}
 }
 
 // delete a node for the subscribed digital input
-void digital_input_delete_node(node_subscribed_inputs_t* node)
+void digital_input_delete_node(node_t *node)
 {
-    node->next = NULL;
-    vPortFree(node);
+	node->next = NULL;
+	free(node);
 }
 
 // append a node to the linked list
-void digital_input_append_node(node_subscribed_inputs_t* node)
+void digital_input_append_node(node_t *node, node_t *head)
 {
-    if (headNodeSubscribedInputs == NULL)
-    {
-        headNodeSubscribedInputs = node;
-        tailNodeSubscribedInputs = node;
-    }
-    else
-    {
-        tailNodeSubscribedInputs->next = node;
-        tailNodeSubscribedInputs = node;
-    }
+	if (head == NULL) {
+		head = node;
+	} else {
+		node_t *current = head;
+		// find the last node
+		while (current->next != NULL) {
+			current = current->next;
+		}
+		// append the new node to the end of the list
+		current->next = node;
+	}
 }
 
 // remove a node from the linked list
-void digital_input_remove_node(node_subscribed_inputs_t* node)
+void digital_input_remove_node(node_t *node, node_t *head)
 {
-    if (headNodeSubscribedInputs == NULL)
-    {
-        return;
-    }
+	if (head == NULL) {
+		return;
+	}
 
-    if (headNodeSubscribedInputs == node)
-    {
-        headNodeSubscribedInputs = headNodeSubscribedInputs->next;
-        if (headNodeSubscribedInputs == NULL)
-        {
-            tailNodeSubscribedInputs = NULL;
-        }
-    }
-    else
-    {
-        node_subscribed_inputs_t* current = headNodeSubscribedInputs;
-        while (current->next != NULL)
-        {
-            if (current->next == node)
-            {
-                current->next = node->next;
-                if (current->next == NULL)
-                {
-                    tailNodeSubscribedInputs = current;
-                }
-                break;
-            }
-            current = current->next;
-        }
-    }
+	if (head == node) {
+		node_subscribed_inputs_t *temp = head;
+		head = head->next;
+		temp->next = NULL;
+	} else {
+		node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+		while (current->next != NULL) {
+			if (current->next == node) {
+				current->next = node->next;
+				node->next = NULL;
+				break;
+			}
+			current = current->next;
+		}
+	}
 }

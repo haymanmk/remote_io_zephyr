@@ -516,11 +516,20 @@ int ethernet_if_send(ethernet_if_socket_service_t *service, const char *format_s
     vsnprintf(buffer, sizeof(buffer), format_string, args);
     va_end(args);
 
+    int ret = 0;
+
     // lock the mutex
     k_mutex_lock(&lock_sock_send, K_FOREVER);
 
+    // check if the client is still connected
+    if (service->poll_fds.fd == -1) {
+        LOG_ERR("Client is not connected");
+        ret = -1;
+        goto exit;
+    }
+        
     // send data to the client
-    int ret = zsock_send(service->poll_fds.fd, buffer, strlen(buffer), 0);
+    ret = zsock_send(service->poll_fds.fd, buffer, strlen(buffer), 0);
     if (ret < 0) {
         LOG_ERR("Failed to send data: %d", -errno);
         ret = -1;
