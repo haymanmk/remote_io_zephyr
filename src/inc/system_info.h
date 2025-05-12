@@ -1,9 +1,10 @@
 #ifndef __SYSTEM_INFO_H
 #define __SYSTEM_INFO_H
 
-#include "ethernet_if.h"
+
+typedef void (*system_info_callback_fn_t)(void *user_data, ...);
 
 /* Public functions */
-void system_info_print(ethernet_if_socket_service_t *service);
+void system_info_print(void *user_data, system_info_callback_fn_t cb);
 
 #endif

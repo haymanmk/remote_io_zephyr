@@ -65,28 +65,16 @@ static void tcp_service_handler(struct net_socket_service_event *pev)
     receive_data(pev, buf, sizeof(buf));
 }
 
+#define _SERV_DESC_CASE_RETURN(ID, _) \
+        case (ID): return &_GET_TCP_SERV_NAME(ID);
+
 static const struct net_socket_service_desc *get_net_socket_service(int index)
 {
     if (index < 0 || index >= POLLABLE_SOCKETS) {
         return NULL;
     }
     switch (index) {
-        case 0: return &_GET_TCP_SERV_NAME(0);
-    #if POLLABLE_SOCKETS > 1
-        case 1: return &_GET_TCP_SERV_NAME(1);
-    #endif
-    #if POLLABLE_SOCKETS > 2
-        case 2: return &_GET_TCP_SERV_NAME(2);
-    #endif
-    #if POLLABLE_SOCKETS > 3
-        case 3: return &_GET_TCP_SERV_NAME(3);
-    #endif
-    #if POLLABLE_SOCKETS > 4
-        case 4: return &_GET_TCP_SERV_NAME(4);
-    #endif
-    #if POLLABLE_SOCKETS > 5
-        case 5: return &_GET_TCP_SERV_NAME(5);
-    #endif
+        LISTIFY(POLLABLE_SOCKETS, _SERV_DESC_CASE_RETURN, (;))
         default: return NULL;
     }
 }

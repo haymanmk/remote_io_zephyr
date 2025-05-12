@@ -1,6 +1,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 
+#include <stdarg.h>
 #include <zephyr/kernel.h>
 #include "stm32f7xx_remote_io.h"
 #include "ethernet_if.h"
@@ -8,6 +9,7 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include "api.h"
 #include "uart.h"
 #include "ws28xx_pwm.h"
+#include "digital_input.h"
 
 #define PARAM_STR_MAX_LENGTH    MAX_INT_DIGITS+2 // 1 for sign, 1 for null terminator
 
@@ -441,6 +443,35 @@ io_status_t api_process_data(ethernet_if_socket_service_t *service, command_line
     return STATUS_FAIL;
 }
 
+static void api_callback(void *user_data, const char *format, void *p1, void *p2, void *p3)
+{
+    // check if the user data is valid
+    if (user_data == NULL)
+    {
+        return;
+    }
+
+    // get the service
+    ethernet_if_socket_service_t *service = (ethernet_if_socket_service_t *)user_data;
+
+    ethernet_if_send(service, format, p1, p2, p3);
+}
+
+static void api_sub_input_cb(void *user_data, uint8_t index, bool state)
+{
+    // check if the user data is valid
+    if (user_data == NULL)
+    {
+        return;
+    }
+
+    // get the service
+    ethernet_if_socket_service_t *service = (ethernet_if_socket_service_t *)user_data;
+
+    // send the state to the client
+    ethernet_if_send(service, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, index + 1, state);
+}
+
 // execute the command
 void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *command_line)
 {
@@ -466,7 +497,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
         if (command_line->type == 'R')
         {
             // get system info
-            system_info_print(service);
+            system_info_print( service, (system_info_callback_fn_t)&api_callback);
         }   
         else
         {
@@ -543,7 +574,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
             // read the state of specified digital input
             else
             {
-                bool state = digital_input_read((uint8_t)(command_line->token->i32));
+                bool state = digital_input_read((uint8_t)(command_line->token->i32 - 1));
                 // send the state to the client, format: "R<Service ID> <Input Index> <State>"
                 ethernet_if_send(service, "R%d %d %d\r\n", SERVICE_ID_INPUT, command_line->token->i32, state);
             }
@@ -553,81 +584,81 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
             error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
         }
         break;
-    // case SERVICE_ID_SUBSCRIBE_INPUT:
-    //     // execute subscribe input command
-    //     if (command_line->type == 'W')
-    //     {
-    //         // check if token is valid
-    //         if (command_line->token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+    case SERVICE_ID_SUBSCRIBE_INPUT:
+        // execute subscribe input command
+        if (command_line->type == 'W')
+        {
+            // check if token is valid
+            if (command_line->token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //         token_t* token = command_line->token;
-    //         while (token != NULL)
-    //         {
-    //             // check if parameter is valid
-    //             if (token->value_type != PARAM_TYPE_INT32 ||
-    //             token->i32 == 0 ||
-    //             token->i32 > DIGITAL_INPUT_MAX)
-    //             {
-    //                 error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                 break;
-    //             }
-    //             // subscribe to the digital input
-    //             digital_input_subscribe(token->i32);
-    //             token = token->next;
-    //         }
-    //         API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else if (command_line->type == 'R')
-    //     {
-    //         // print header
-    //         ethernet_if_send(service, "R%d ", SERVICE_ID_SUBSCRIBE_INPUT);
-    //         // print current subscribed digital inputs
-    //         digital_input_print_subscribed_inputs();
-    //         // print new line
-    //         ethernet_if_send(service, "\r\n");
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SERVICE_ID_UNSUBSCRIBE_INPUT:
-    //     // execute unsubscribe input command
-    //     // check if token is valid
-    //     if (command_line->token == NULL)
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //         break;
-    //     }
+            token_t* token = command_line->token;
+            while (token != NULL)
+            {
+                // check if parameter is valid
+                if (token->value_type != PARAM_TYPE_INT32 ||
+                token->i32 == 0 ||
+                token->i32 > DIGITAL_INPUT_MAX)
+                {
+                    error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                    break;
+                }
+                // subscribe to the digital input
+                digital_input_subscribe(service, (token->i32 - 1), (digital_input_callback_fn_t)&api_sub_input_cb);
+                token = token->next;
+            }
+            API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else if (command_line->type == 'R')
+        {
+            // print header
+            ethernet_if_send(service, "R%d ", SERVICE_ID_SUBSCRIBE_INPUT);
+            // print current subscribed digital inputs
+            digital_input_print_subscribed_inputs(service, (digital_input_callback_fn_t)&api_callback);
+            // print new line
+            ethernet_if_send(service, "\r\n");
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SERVICE_ID_UNSUBSCRIBE_INPUT:
+        // execute unsubscribe input command
+        // check if token is valid
+        if (command_line->token == NULL)
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+            break;
+        }
 
-    //     if (command_line->type == 'W')
-    //     {
-    //         token_t* token = command_line->token;
-    //         while (token != NULL)
-    //         {
-    //             // check if parameter is valid
-    //             if (token->value_type != PARAM_TYPE_INT32 ||
-    //             token->i32 == 0 ||
-    //             token->i32 > DIGITAL_INPUT_MAX)
-    //             {
-    //                 error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                 break;
-    //             }
-    //             // unsubscribe to the digital input
-    //             digital_input_unsubscribe(token->i32);
-    //             token = token->next;
-    //         }
-    //         API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
+        if (command_line->type == 'W')
+        {
+            token_t* token = command_line->token;
+            while (token != NULL)
+            {
+                // check if parameter is valid
+                if (token->value_type != PARAM_TYPE_INT32 ||
+                token->i32 == 0 ||
+                token->i32 > DIGITAL_INPUT_MAX)
+                {
+                    error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                    break;
+                }
+                // unsubscribe to the digital input
+                digital_input_unsubscribe(service, token->i32 - 1);
+                token = token->next;
+            }
+            API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
     // case SERVICE_ID_OUTPUT:
     // {
     //     // check if token is valid

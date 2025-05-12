@@ -11,7 +11,7 @@ typedef struct DigitalInput
     bool state;
 } digital_input_t;
 
-typedef void (*callback_fn_t)(void *user_data, ...);
+typedef void (*digital_input_callback_fn_t)(void *user_data, ...);
 
 /* Macros */
 #define CREATE_DIGITAL_INPUT_INSTANCE(index) \
@@ -29,8 +29,8 @@ typedef void (*callback_fn_t)(void *user_data, ...);
 io_status_t digital_input_init();
 bool digital_input_read(uint8_t index);
 uint32_t digital_input_read_all();
-void digital_input_subscribe(uint8_t index);
-void digital_input_unsubscribe(uint8_t index);
-void digital_input_print_subscribed_inputs();
+void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callback_fn_t callback);
+void digital_input_unsubscribe(void *user_data, uint8_t index);
+void digital_input_print_subscribed_inputs(void *user_data, digital_input_callback_fn_t callback);
 
 #endif

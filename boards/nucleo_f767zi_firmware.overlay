@@ -7,8 +7,8 @@
     };
 
     user_inputs {
-        usr_in_0: user_input_0 {
         compatible = "gpio-keys";
+        usr_in_0: user_input_0 {
             gpios = <&gpioe 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
         usr_in_1: user_input_1 {
@@ -29,31 +29,31 @@
         usr_in_6: user_input_6 {
             gpios = <&gpioe 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_7 user_input_7 {
+        usr_in_7: user_input_7 {
             gpios = <&gpioe 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_8 user_input_8 {
+        usr_in_8: user_input_8 {
             gpios = <&gpioe 10 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_9 user_input_9 {
+        usr_in_9: user_input_9 {
             gpios = <&gpiof 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_10 user_input_10 {
+        usr_in_10: user_input_10 {
             gpios = <&gpiof 1 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_11 user_input_11 {
+        usr_in_11: user_input_11 {
             gpios = <&gpiof 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_12 user_input_12 {
+        usr_in_12: user_input_12 {
             gpios = <&gpiof 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_13 user_input_13 {
+        usr_in_13: user_input_13 {
             gpios = <&gpiof 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_14 user_input_14 {
+        usr_in_14: user_input_14 {
             gpios = <&gpiof 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
-        usr_in_15 user_input_15 {
+        usr_in_15: user_input_15 {
             gpios = <&gpiof 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
         };
     };
