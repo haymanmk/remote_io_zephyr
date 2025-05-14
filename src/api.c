@@ -10,6 +10,8 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include "uart.h"
 #include "ws28xx_pwm.h"
 #include "digital_input.h"
+#include "settings.h"
+#include "flash.h"
 
 #define PARAM_STR_MAX_LENGTH    MAX_INT_DIGITS+2 // 1 for sign, 1 for null terminator
 
@@ -33,9 +35,9 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 token_t* api_create_token();
 void api_free_tokens(token_t* token);
 void api_reset_command_line();
-io_status_t api_process_data(ethernet_if_socket_service_t *service, command_line_t *command_line);
-void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *command_line);
-void api_error(ethernet_if_socket_service_t *service, uint16_t error_code);
+io_status_t api_process_data(api_service_context_t *service, command_line_t *command_line);
+void api_execute_command(api_service_context_t *service, command_line_t *command_line);
+void api_error(api_service_context_t *service, uint16_t error_code);
 
 // event for receiving new data
 K_EVENT_DEFINE(apiNewDataEvent);
@@ -49,7 +51,7 @@ void api_task(void *p1, void *p2, void *p3)
 {
     // conver parameters
     // p1 -> service
-    ethernet_if_socket_service_t *service = (ethernet_if_socket_service_t *)p1;
+    api_service_context_t *service = (api_service_context_t *)p1;
     // unused parameters
     (void)p2;
     (void)p3;
@@ -146,7 +148,7 @@ void api_reset_command_line(command_line_t *command_line)
 }
 
 // parse received data
-io_status_t api_process_data(ethernet_if_socket_service_t *service, command_line_t *command_line)
+io_status_t api_process_data(api_service_context_t *service, command_line_t *command_line)
 {
     utils_ring_buffer_t *rx_buf = service->rx_buffer; // rx buffer
     char *rxBuffer = rx_buf->buffer; // buffer pointer
@@ -452,9 +454,9 @@ static void api_callback(void *user_data, const char *format, void *p1, void *p2
     }
 
     // get the service
-    ethernet_if_socket_service_t *service = (ethernet_if_socket_service_t *)user_data;
+    api_service_context_t *service = (api_service_context_t *)user_data;
 
-    ethernet_if_send(service, format, p1, p2, p3);
+    service->response_cb(service->user_data, format, p1, p2, p3);
 }
 
 static void api_sub_input_cb(void *user_data, uint8_t index, bool state)
@@ -466,14 +468,14 @@ static void api_sub_input_cb(void *user_data, uint8_t index, bool state)
     }
 
     // get the service
-    ethernet_if_socket_service_t *service = (ethernet_if_socket_service_t *)user_data;
+    api_service_context_t *service = (api_service_context_t *)user_data;
 
     // send the state to the client
-    ethernet_if_send(service, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, index + 1, state);
+    service->response_cb(service->user_data, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, index + 1, state);
 }
 
 // execute the command
-void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *command_line)
+void api_execute_command(api_service_context_t *service, command_line_t *command_line)
 {
     uint16_t error_code = 0;
 
@@ -569,14 +571,14 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
                 // read all the digital inputs
                 uint32_t state = digital_input_read_all();
                 // send the state to the client, format: "R<Service ID> <State>"
-                ethernet_if_send(service, "R%d %d\r\n", SERVICE_ID_INPUT, state);
+                service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_INPUT, state);
             }
             // read the state of specified digital input
             else
             {
                 bool state = digital_input_read((uint8_t)(command_line->token->i32 - 1));
                 // send the state to the client, format: "R<Service ID> <Input Index> <State>"
-                ethernet_if_send(service, "R%d %d %d\r\n", SERVICE_ID_INPUT, command_line->token->i32, state);
+                service->response_cb(service->user_data, "R%d %d %d\r\n", SERVICE_ID_INPUT, command_line->token->i32, state);
             }
         }
         else
@@ -615,11 +617,11 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
         else if (command_line->type == 'R')
         {
             // print header
-            ethernet_if_send(service, "R%d ", SERVICE_ID_SUBSCRIBE_INPUT);
+            service->response_cb(service->user_data, "R%d ", SERVICE_ID_SUBSCRIBE_INPUT);
             // print current subscribed digital inputs
             digital_input_print_subscribed_inputs(service, (digital_input_callback_fn_t)&api_callback);
             // print new line
-            ethernet_if_send(service, "\r\n");
+            service->response_cb(service->user_data, "\r\n");
         }
         else
         {
@@ -746,14 +748,14 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     //             // read all the digital outputs
     //             uint32_t state = digital_output_read_all();
     //             // send the state to the client, format: "R<Service ID> <State>"
-    //             ethernet_if_send(service, "R%d %d\r\n", SERVICE_ID_OUTPUT, state);
+    //             service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_OUTPUT, state);
     //         }
     //         else
     //         {
     //             // read the state of specified digital output
     //             bool state = digital_output_read((uint8_t)output_index);
     //             // send the state to the client, format: "R<Service ID> <Output Index> <State>"
-    //             ethernet_if_send(service, "R%d %d %d\r\n", SERVICE_ID_OUTPUT, output_index, state);
+    //             service->response_cb(service->user_data, "R%d %d %d\r\n", SERVICE_ID_OUTPUT, output_index, state);
     //         }
     //     }
     //     else
@@ -831,7 +833,7 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     //         // read the color of the LED
     //         ws_color_t color = ws28xx_pwm_color[led_index];
     //         // send the color to the client, format: "R<Service ID> <LED Index> <R> <G> <B>"
-    //         ethernet_if_send(service, "R%d %d %d %d %d\r\n", SERVICE_ID_PWM_WS28XX_LED, led_index, color.r, color.g, color.b);
+    //         service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SERVICE_ID_PWM_WS28XX_LED, led_index, color.r, color.g, color.b);
     //     }
     //     else
     //     {
@@ -839,234 +841,234 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     //     }
     //     break;
     // }
-    // case SETTING_ID_IP_ADDRESS:
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the IP address to the client, format: "R<Service ID> <IP Addr 1> <IP Addr 2> <IP Addr 3> <IP Addr 4>"
-    //         // e.g. "R101 172 16 0 10"
-    //         ethernet_if_send(service, "R%d %d %d %d %d\r\n", SETTING_ID_IP_ADDRESS,
-    //                     settings.ip_address_0, settings.ip_address_1,
-    //                     settings.ip_address_2, settings.ip_address_3);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         uint8_t ip_address[4] = {0};
-    //         token_t* token = command_line->token;
+    case SETTING_ID_IP_ADDRESS:
+        if (command_line->type == 'R')
+        {
+            // send the IP address to the client, format: "R<Service ID> <IP Addr 1> <IP Addr 2> <IP Addr 3> <IP Addr 4>"
+            // e.g. "R101 172 16 0 10"
+            service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SETTING_ID_IP_ADDRESS,
+                        settings.ip_address_0, settings.ip_address_1,
+                        settings.ip_address_2, settings.ip_address_3);
+        }
+        else if (command_line->type == 'W')
+        {
+            uint8_t ip_address[4] = {0};
+            token_t* token = command_line->token;
 
-    //         // copy IP address from token to buffer
-    //         API_COPY_TOKEN_DATA_TO_BUFFER(token, ip_address, 4);
+            // copy IP address from token to buffer
+            API_COPY_TOKEN_DATA_TO_BUFFER(token, ip_address, 4);
             
-    //         // update the IP address in the settings
-    //         settings.ip_address_0 = ip_address[0];
-    //         settings.ip_address_1 = ip_address[1];
-    //         settings.ip_address_2 = ip_address[2];
-    //         settings.ip_address_3 = ip_address[3];
+            // update the IP address in the settings
+            settings.ip_address_0 = ip_address[0];
+            settings.ip_address_1 = ip_address[1];
+            settings.ip_address_2 = ip_address[2];
+            settings.ip_address_3 = ip_address[3];
 
-    //         // save IP address in flash
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_IP_FAILED;
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SETTING_ID_NETMASK:
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the netmask to the client, format: "R<Service ID> <Netmask 1> <Netmask 2> <Netmask 3> <Netmask 4>"
-    //         // e.g. "R102 255 240 0 0"
-    //         ethernet_if_send(service, "R%d %d %d %d %d\r\n", SETTING_ID_NETMASK,
-    //                     settings.netmask_0, settings.netmask_1,
-    //                     settings.netmask_2, settings.netmask_3);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         uint8_t netmask[4] = {0};
-    //         token_t* token = command_line->token;
+            // save IP address in flash
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_IP_FAILED;
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SETTING_ID_NETMASK:
+        if (command_line->type == 'R')
+        {
+            // send the netmask to the client, format: "R<Service ID> <Netmask 1> <Netmask 2> <Netmask 3> <Netmask 4>"
+            // e.g. "R102 255 240 0 0"
+            service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SETTING_ID_NETMASK,
+                        settings.netmask_0, settings.netmask_1,
+                        settings.netmask_2, settings.netmask_3);
+        }
+        else if (command_line->type == 'W')
+        {
+            uint8_t netmask[4] = {0};
+            token_t* token = command_line->token;
 
-    //         // copy netmask from token to buffer
-    //         API_COPY_TOKEN_DATA_TO_BUFFER(token, netmask, 4);
+            // copy netmask from token to buffer
+            API_COPY_TOKEN_DATA_TO_BUFFER(token, netmask, 4);
 
-    //         // update the netmask in the settings
-    //         settings.netmask_0 = netmask[0];
-    //         settings.netmask_1 = netmask[1];
-    //         settings.netmask_2 = netmask[2];
-    //         settings.netmask_3 = netmask[3];
+            // update the netmask in the settings
+            settings.netmask_0 = netmask[0];
+            settings.netmask_1 = netmask[1];
+            settings.netmask_2 = netmask[2];
+            settings.netmask_3 = netmask[3];
 
-    //         // save netmask in flash
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_NETMASK_FAILED;
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SETTING_ID_GATEWAY:
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the gateway to the client, format: "R<Service ID> <Gateway 1> <Gateway 2> <Gateway 3> <Gateway 4>"
-    //         // e.g. "R103 172 16 0 1"
-    //         ethernet_if_send(service, "R%d %d %d %d %d\r\n", SETTING_ID_GATEWAY,
-    //                     settings.gateway_0, settings.gateway_1,
-    //                     settings.gateway_2, settings.gateway_3);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         uint8_t gateway[4] = {0};
-    //         token_t* token = command_line->token;
+            // save netmask in flash
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_NETMASK_FAILED;
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SETTING_ID_GATEWAY:
+        if (command_line->type == 'R')
+        {
+            // send the gateway to the client, format: "R<Service ID> <Gateway 1> <Gateway 2> <Gateway 3> <Gateway 4>"
+            // e.g. "R103 172 16 0 1"
+            service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SETTING_ID_GATEWAY,
+                        settings.gateway_0, settings.gateway_1,
+                        settings.gateway_2, settings.gateway_3);
+        }
+        else if (command_line->type == 'W')
+        {
+            uint8_t gateway[4] = {0};
+            token_t* token = command_line->token;
 
-    //         // copy gateway from token to buffer
-    //         API_COPY_TOKEN_DATA_TO_BUFFER(token, gateway, 4);
+            // copy gateway from token to buffer
+            API_COPY_TOKEN_DATA_TO_BUFFER(token, gateway, 4);
 
-    //         // update the gateway in the settings
-    //         settings.gateway_0 = gateway[0];
-    //         settings.gateway_1 = gateway[1];
-    //         settings.gateway_2 = gateway[2];
-    //         settings.gateway_3 = gateway[3];
+            // update the gateway in the settings
+            settings.gateway_0 = gateway[0];
+            settings.gateway_1 = gateway[1];
+            settings.gateway_2 = gateway[2];
+            settings.gateway_3 = gateway[3];
 
-    //         // save gateway in flash
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_GATEWAY_FAILED;
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SETTING_ID_MAC_ADDRESS:
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the MAC address to the client, format: "R<Service ID> <MAC Addr 1> <MAC Addr 2> <MAC Addr 3> <MAC Addr 4> <MAC Addr 5> <MAC Addr 6>"
-    //         // e.g. "R104 0 0 0 0 0 0"
-    //         ethernet_if_send(service, "R%d %d %d %d %d %d %d\r\n", SETTING_ID_MAC_ADDRESS,
-    //                     settings.mac_address_0, settings.mac_address_1,
-    //                     settings.mac_address_2, settings.mac_address_3,
-    //                     settings.mac_address_4, settings.mac_address_5);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         uint8_t mac_address[6] = {0};
-    //         token_t* token = command_line->token;
+            // save gateway in flash
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_GATEWAY_FAILED;
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SETTING_ID_MAC_ADDRESS:
+        if (command_line->type == 'R')
+        {
+            // send the MAC address to the client, format: "R<Service ID> <MAC Addr 1> <MAC Addr 2> <MAC Addr 3> <MAC Addr 4> <MAC Addr 5> <MAC Addr 6>"
+            // e.g. "R104 0 0 0 0 0 0"
+            service->response_cb(service->user_data, "R%d %d %d %d %d %d %d\r\n", SETTING_ID_MAC_ADDRESS,
+                        settings.mac_address_0, settings.mac_address_1,
+                        settings.mac_address_2, settings.mac_address_3,
+                        settings.mac_address_4, settings.mac_address_5);
+        }
+        else if (command_line->type == 'W')
+        {
+            uint8_t mac_address[6] = {0};
+            token_t* token = command_line->token;
 
-    //         // copy MAC address from token to buffer
-    //         API_COPY_TOKEN_DATA_TO_BUFFER(token, mac_address, 6);
+            // copy MAC address from token to buffer
+            API_COPY_TOKEN_DATA_TO_BUFFER(token, mac_address, 6);
 
-    //         // update the MAC address in the settings
-    //         settings.mac_address_0 = mac_address[0];
-    //         settings.mac_address_1 = mac_address[1];
-    //         settings.mac_address_2 = mac_address[2];
-    //         settings.mac_address_3 = mac_address[3];
-    //         settings.mac_address_4 = mac_address[4];
-    //         settings.mac_address_5 = mac_address[5];
+            // update the MAC address in the settings
+            settings.mac_address_0 = mac_address[0];
+            settings.mac_address_1 = mac_address[1];
+            settings.mac_address_2 = mac_address[2];
+            settings.mac_address_3 = mac_address[3];
+            settings.mac_address_4 = mac_address[4];
+            settings.mac_address_5 = mac_address[5];
 
-    //         // save MAC address in flash
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_MAC_ADDRESS_FAILED;
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SETTING_ID_TCP_PORT:
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the Ethernet port to the client, format: "R<Service ID> <Port>"
-    //         // e.g. "R105 80"
-    //         ethernet_if_send(service, "R%d %d\r\n", SETTING_ID_TCP_PORT, settings.tcp_port);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         // check if token is valid
-    //         if (command_line->token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+            // save MAC address in flash
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_MAC_ADDRESS_FAILED;
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SETTING_ID_TCP_PORT:
+        if (command_line->type == 'R')
+        {
+            // send the Ethernet port to the client, format: "R<Service ID> <Port>"
+            // e.g. "R105 80"
+            service->response_cb(service->user_data, "R%d %d\r\n", SETTING_ID_TCP_PORT, settings.tcp_port);
+        }
+        else if (command_line->type == 'W')
+        {
+            // check if token is valid
+            if (command_line->token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //         token_t* token = command_line->token;
+            token_t* token = command_line->token;
 
-    //         // write the Ethernet port
-    //         settings.tcp_port = (uint16_t)(token->i32);
+            // write the Ethernet port
+            settings.tcp_port = (uint16_t)(token->i32);
 
-    //         // write the Ethernet port
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_IP_FAILED; /////////////////////////////////////////////
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // case SETTING_ID_BAUD_RATE:
-    //     // assert if variant is valid
-    //     if (command_line->variant >= UART_MAX)
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_VARIANT;
-    //         break;
-    //     }
+            // write the Ethernet port
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_IP_FAILED; /////////////////////////////////////////////
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    case SETTING_ID_BAUD_RATE:
+        // assert if variant is valid
+        if (command_line->variant >= UART_MAX)
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_VARIANT;
+            break;
+        }
 
-    //     if (command_line->type == 'R')
-    //     {
-    //         // send the baud rate to the client, format: "R<Service ID> <Baud Rate>"
-    //         // e.g. "R106.x 115200"
-    //         ethernet_if_send(service, "R%d.%d %d\r\n", SETTING_ID_BAUD_RATE, command_line->variant,
-    //                     settings.uart[command_line->variant].baudrate);
-    //     }
-    //     else if (command_line->type == 'W')
-    //     {
-    //         // check if token is valid
-    //         if (command_line->token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+        if (command_line->type == 'R')
+        {
+            // send the baud rate to the client, format: "R<Service ID> <Baud Rate>"
+            // e.g. "R106.x 115200"
+            service->response_cb(service->user_data, "R%d.%d %d\r\n", SETTING_ID_BAUD_RATE, command_line->variant,
+                        settings.uart[command_line->variant].baudrate);
+        }
+        else if (command_line->type == 'W')
+        {
+            // check if token is valid
+            if (command_line->token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //         token_t* token = command_line->token;
+            token_t* token = command_line->token;
 
-    //         // write the baud rate
-    //         settings.uart[command_line->variant].baudrate = (uint32_t)(token->i32);
+            // write the baud rate
+            settings.uart[command_line->variant].baudrate = (uint32_t)(token->i32);
 
-    //         // write the baud rate
-    //         if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_IP_FAILED; /////////////////////////////////////////////
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
+            // write the baud rate
+            if (flash_write_data_with_checksum(FLASH_SECTOR_SETTINGS, (uint8_t*)&settings, sizeof(settings_t)) != STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_UPDATE_IP_FAILED; /////////////////////////////////////////////
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
     default:
     {
         // debug print the command
         LOG_DBG("Command: %c.%d \r\n", command_line->type, command_line->id);
-        ethernet_if_send(service, "%c%d", command_line->type, command_line->id);
+        service->response_cb(service->user_data, "%c%d", command_line->type, command_line->id);
         if (command_line->variant > 0)
         {
             LOG_DBG("Variant: %d \r\n", command_line->variant);
-            ethernet_if_send(service, ".%d", command_line->variant);
+            service->response_cb(service->user_data, ".%d", command_line->variant);
         }
-        ethernet_if_send(service, "\r\n");
+        service->response_cb(service->user_data, "\r\n");
 
         // print the parameters
         token_t* token = command_line->token;
@@ -1107,9 +1109,9 @@ void api_execute_command(ethernet_if_socket_service_t *service, command_line_t *
     }
 }
 
-void api_error(ethernet_if_socket_service_t *service, uint16_t error_code)
+void api_error(api_service_context_t *service, uint16_t error_code)
 {
     // print error code
-    ethernet_if_send(service, ERROR_CODE_FORMAT, error_code);
+    service->response_cb(service->user_data, ERROR_CODE_FORMAT, error_code);
     LOG_ERR("Error: %d\n", error_code);
 }

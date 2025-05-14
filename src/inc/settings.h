@@ -1,14 +1,18 @@
 #ifndef __SETTINGS_H
 #define __SETTINGS_H
 
+#include "stm32f7xx_remote_io.h"
 #include "uart.h"
 
 // flags for instructing restoring function to restore settings
 #define SETTINGS_RESTORE_DEFAULTS (1 << 0)
 
+// event for settings loaded
+#define SETTINGS_LOADED_EVENT (1 << 0)
+
 // Note: please modify the settings version
 // whenever there is a change in the settings structure.
-#define SETTINGS_VERSION 2
+#define SETTINGS_VERSION 1
 
 // type of settings
 typedef struct EthernetSettings
@@ -72,6 +76,6 @@ extern settings_t settings;
 
 /* Export functions */
 void settings_init();
-int settings_save();
+io_status_t settings_save();
 
 #endif

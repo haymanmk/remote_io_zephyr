@@ -5,6 +5,7 @@
 #include <zephyr/net/socket_poll.h>
 #include <zephyr/sys/util_macro.h>
 #include "utils.h"
+#include "api.h"
 
 #define MAX_POLLABLE_SOCKETS 6
 #define TCP_SERVICE_NAME tcp_service
@@ -33,18 +34,15 @@
 
 // define a struct to hold socket service information
 typedef struct ethernet_if_socket_service {
+        api_service_context_t service_context;
         struct zsock_pollfd poll_fds;
         const struct net_socket_service_desc *service;
-        // rx ring buffer
-        struct UtilsRingBuffer *rx_buffer;
         // pointer to the thread that is processing the socket service
         struct k_thread thread;
         // thread id
         k_tid_t thread_id;
         // pointer to the stack of the thread
         k_thread_stack_t *stack;
-        // event for receiving new data
-        uint32_t event;
 } ethernet_if_socket_service_t;
 
 

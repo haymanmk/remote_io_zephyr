@@ -31,6 +31,7 @@ bool digital_input_read(uint8_t index);
 uint32_t digital_input_read_all();
 void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callback_fn_t callback);
 void digital_input_unsubscribe(void *user_data, uint8_t index);
+void digital_input_unsubscribe_all(void *user_data);
 void digital_input_print_subscribed_inputs(void *user_data, digital_input_callback_fn_t callback);
 
 #endif

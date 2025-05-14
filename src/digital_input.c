@@ -317,6 +317,22 @@ void digital_input_unsubscribe(void *user_data, uint8_t index)
 	}
 }
 
+void digital_input_unsubscribe_all(void *user_data)
+{
+    node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+    while (current != NULL) {
+        service_node_t *service_current = current->services;
+        while (service_current != NULL) {
+            if (service_current->user_data == user_data) {
+                digital_input_unsubscribe(user_data, current->index);
+                break;
+            }
+            service_current = service_current->next;
+        }
+        current = current->next;
+    }
+}
+
 // print current subscribed digital inputs
 // note: this function only prints the index of the subscribed digital inputs with a space as the
 // delimiter.

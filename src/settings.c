@@ -1,4 +1,18 @@
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(settings, LOG_LEVEL_DBG);
+
+#include <zephyr/net/net_if.h>
+
 #include "stm32f7xx_remote_io.h"
+#include "flash.h"
+#include "settings.h"
+
+// create a event to signal when the settings are loaded
+K_EVENT_DEFINE(settingsLoadedEvent);
+
+// listen to the event when flash area is ready
+extern struct k_event flashAreaReadyEvent;
 
 settings_t settings;
 
@@ -51,29 +65,44 @@ io_status_t settings_load();
 
 void settings_restore(uint8_t restore_flag)
 {
+    // get default network interface
+    struct net_if *iface = net_if_get_default();
+    if (iface == NULL)
+    {
+        LOG_ERR("No default network interface found");
+        return;
+    }
+    // get default network interface link address
+    struct net_linkaddr *link_addr = net_if_get_link_addr(iface);
+
+    // restore default settings
     settings = defaults;
-    // set MAC address with STM32 UID
-    // read the unique ID of the STM32F7xx MCU
-    uint32_t uid_0 = HAL_GetUIDw0();
-    uint32_t uid_1 = HAL_GetUIDw1();
-    settings.mac_address_0 = (uid_0 >> 24) & 0xFF;
-    settings.mac_address_1 = (uid_0 >> 16) & 0xFF;
-    settings.mac_address_2 = (uid_0 >> 8) & 0xFF;
-    settings.mac_address_3 = (uid_1 >> 24) & 0xFF;
-    settings.mac_address_4 = (uid_1 >> 16) & 0xFF;
-    settings.mac_address_5 = (uid_1 >> 8) & 0xFF;
+
+    // restore MAC address
+    settings.mac_address_0 = link_addr->addr[0];
+    settings.mac_address_1 = link_addr->addr[1];
+    settings.mac_address_2 = link_addr->addr[2];
+    settings.mac_address_3 = link_addr->addr[3];
+    settings.mac_address_4 = link_addr->addr[4];
+    settings.mac_address_5 = link_addr->addr[5];
 
     settings_save();
 }
 
 void settings_init()
 {
+    // wait for flash area to be ready
+    k_event_wait(&flashAreaReadyEvent, FLASH_AREA_READY_EVENT, false, K_FOREVER);
+
     // load settings from flash
     if (settings_load() != STATUS_OK)
     {
         // if failed to load settings, restore defaults
         settings_restore(SETTINGS_RESTORE_DEFAULTS);
     }
+
+    // signal that the settings are loaded
+    k_event_post(&settingsLoadedEvent, SETTINGS_LOADED_EVENT);
 }
 
 io_status_t settings_save()

@@ -1,81 +1,129 @@
+#include <zephyr/kernel.h>
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/sys/util_macro.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(flash_storage, LOG_LEVEL_DBG);
+
 #include "stm32f7xx_remote_io.h"
+#include "flash.h"
 
-HAL_StatusTypeDef flash_erase_sector(uint32_t sector, uint32_t num_sectors);
+/**
+ * @brief The label for the flash area can be found in the device tree.
+ */
+// storage partition id
+#define STORAGE_PARTITION_0_ID FIXED_PARTITION_ID(storage_partition_0)
+#define STORAGE_PARTITION_1_ID FIXED_PARTITION_ID(storage_partition_1)
 
+/* Private function prototypes */
+io_status_t flash_erase_sector(const struct flash_area *sector);
 
-HAL_StatusTypeDef flash_erase_sector(uint32_t sector, uint32_t num_sectors)
+/* Variables */
+// create a event to signal when the flash area is ready
+K_EVENT_DEFINE(flashAreaReadyEvent);
+
+// flash device reference - storage partition
+const struct flash_area *storage_0 = NULL;
+const struct flash_area *storage_1 = NULL;
+
+// used by listify
+#define __BRING_UP_FLASH_AREA(id, _) \
+    if (flash_area_open(STORAGE_PARTITION_##id##_ID, &storage_##id) != 0) \
+    { \
+        LOG_ERR("Failed to open flash area %d", id); \
+        return STATUS_ERROR; \
+    } \
+    if (!flash_area_device_is_ready(storage_##id)) \
+    { \
+        LOG_ERR("Flash area %d device is not ready", id); \
+        flash_area_close(storage_##id); \
+        return STATUS_ERROR; \
+    }
+#define BRING_UP_FLASH_AREA(N) \
+    do { \
+        LISTIFY(N, __BRING_UP_FLASH_AREA, ( )) \
+    } while (0)
+
+// initialize the flash device
+io_status_t flash_init(void)
 {
-    HAL_FLASH_Unlock();
+    // // get the flash area
+    // if (flash_area_open(STORAGE_PARTITION_ID, &storage_partition) != 0)
+    // {
+    //     LOG_ERR("Failed to open flash area");
+    //     return STATUS_ERROR; // failed to open flash area
+    // }
 
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS); 
+    // // check if the device is ready
+    // if (!flash_area_device_is_ready(storage_partition))
+    // {
+    //     LOG_ERR("Flash area device is not ready");
+    //     flash_area_close(storage_partition);
+    //     return STATUS_ERROR; // flash area device is not ready
+    // }
+    BRING_UP_FLASH_AREA(2);
 
-    FLASH_EraseInitTypeDef EraseInitStruct;
-    EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
-    EraseInitStruct.Sector = sector;
-    EraseInitStruct.NbSectors = num_sectors;
-    EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+    // signal that the flash area is ready
+    k_event_post(&flashAreaReadyEvent, FLASH_AREA_READY_EVENT);
 
-    uint32_t SectorError = 0;
-    if (HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError) == HAL_OK)
-    {
-        HAL_FLASH_Lock(); 
-        return HAL_OK;
-    }
-    else
-    {
-        HAL_FLASH_Lock(); 
-        return HAL_FLASH_GetError ();
-    }
+    return STATUS_OK; // flash area device is ready
 }
 
-HAL_StatusTypeDef flash_put_byte(uint32_t address, uint8_t data)
+io_status_t flash_erase_sector(const struct flash_area *sector)
 {
-    HAL_FLASH_Unlock();
+    int ret = 0;
 
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS); 
+    if (sector == NULL)
+    {
+        LOG_ERR("Flash area is NULL");
+        return STATUS_ERROR; // invalid flash area
+    }
 
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, address, data) == HAL_OK)
+    if ((ret = flash_area_erase(sector, 0, sector->fa_size)) < 0)
     {
-        HAL_FLASH_Lock(); 
-        return HAL_OK;
+        LOG_ERR("Failed to erase flash area %d: %d", sector->fa_id, ret);
+        return STATUS_ERROR; // failed to erase flash area
     }
-    else
-    {
-        HAL_FLASH_Lock(); 
-        return HAL_FLASH_GetError ();
-    }
+
+    return STATUS_OK; // flash area erased successfully
 }
 
-uint8_t flash_get_byte(uint32_t address)
+/**
+ * @brief Write data to flash memory with checksum
+ * @param sector The flash area to write data to
+ * @param data The data to write
+ * @param length The length of the data
+ * @return STATUS_OK if the write is successful, otherwise STATUS_ERROR
+ */
+io_status_t flash_write_data_with_checksum(const struct flash_area *sector, uint8_t *data, size_t length)
 {
-    return *(__IO uint8_t *)address;
-}
-
-// The method to calculate checksum is referenced from GRBL.
-io_status_t flash_write_data_with_checksum(uint32_t sector, uint8_t *data, size_t length)
-{
-    // get sector base address by sector number
-    uint32_t address;
-    switch (sector)
-    {
-        case FLASH_SECTOR_SETTINGS:
-            address = FLASH_SECTOR_SETTINGS_BASE_ADDRESS;
-            break;
-        default:
-            return STATUS_ERROR;
-    }
-
     // earase the sector before writing data
-    flash_erase_sector(sector, 1);
+    if (flash_erase_sector(sector) < 0)
+    {
+        LOG_ERR("Failed to erase flash area %d", sector->fa_id);
+        return STATUS_ERROR; // failed to erase flash area
+    }
 
+    // compute checksum
     uint8_t checksum = 0;
-    for (; length > 0; length--)
+    uint8_t *_data = data;
+    uint8_t len = length;
+    for (; len > 0; len--)
     {
         checksum = (checksum << 1) | (checksum >> 7);
-        checksum += *data;
-        flash_put_byte(address++, *(data++));
+        checksum += *_data;
+        _data++;
     }
-    flash_put_byte(address, checksum);
+    if (flash_area_write(sector, 0, data, length) < 0)
+    {
+        LOG_ERR("Failed to write flash area %d", sector->fa_id);
+        return STATUS_ERROR; // failed to write flash area
+    }
+    // write checksum to the last byte of the sector
+    if (flash_area_write(sector, length, &checksum, sizeof(checksum)) < 0)
+    {
+        LOG_ERR("Failed to write checksum to flash area %d", sector->fa_id);
+        return STATUS_ERROR; // failed to write checksum
+    }
 
     return STATUS_OK;
 }
@@ -87,26 +135,30 @@ io_status_t flash_write_data_with_checksum(uint32_t sector, uint8_t *data, size_
  * @param length The length of the data
  * @return STATUS_OK if the checksum is correct, otherwise STATUS_ERROR
  */
-io_status_t flash_read_data_with_checksum(uint32_t sector, uint8_t *data, size_t length)
+io_status_t flash_read_data_with_checksum(const struct flash_area *sector, uint8_t *data, size_t length)
 {
-    // get the base address of the sector by sector number
-    uint32_t address;
-    switch (sector)
+    // read data from flash memory
+    if (flash_area_read(sector, 0, data, length) < 0)
     {
-        case FLASH_SECTOR_SETTINGS:
-            address = FLASH_SECTOR_SETTINGS_BASE_ADDRESS;
-            break;
-        default:
-            return STATUS_ERROR;
+        LOG_ERR("Failed to read flash area %d", sector->fa_id);
+        return STATUS_ERROR; // failed to read flash area
     }
-
+    // compute checksum
     uint8_t checksum = 0;
-    for (; length > 0; length--)
+    uint8_t *_data = data;
+    uint8_t len = length;
+    for (; len > 0; len--)
     {
-        *data = flash_get_byte(address++);
         checksum = (checksum << 1) | (checksum >> 7);
-        checksum += *data;
-        data++;
+        checksum += *_data;
+        _data++;
     }
-    return (checksum == flash_get_byte(address)) ? STATUS_OK : STATUS_ERROR;
+    // read checksum from the last byte of the sector
+    uint8_t checksum_from_flash = 0;
+    if (flash_area_read(sector, length, &checksum_from_flash, sizeof(checksum_from_flash)) < 0)
+    {
+        LOG_ERR("Failed to read checksum from flash area %d", sector->fa_id);
+        return STATUS_ERROR; // failed to read checksum
+    }
+    return (checksum == checksum_from_flash) ? STATUS_OK : STATUS_ERROR;
 }

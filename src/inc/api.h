@@ -1,6 +1,7 @@
 #ifndef __API_H
 #define __API_H
 
+#include "utils.h"
 
 // Service ID
 #define SERVICE_ID_STATUS 1
@@ -67,11 +68,20 @@ enum {
 // default response to client
 #define API_DEFAULT_RESPONSE(SERV, CMD_TYPE, CMD_ID) \
     do { \
-        ethernet_if_send((SERV), "%c%d OK\r\n", (CMD_TYPE), (CMD_ID)); \
+        (SERV)->response_cb((SERV)->user_data, "%c%d OK\r\n", (CMD_TYPE), (CMD_ID)); \
     } while (0)
 
 
 /* Type definition */
+typedef void (*api_response_callback_t)(void *user_data, ...);
+
+typedef struct APIServiceContext {
+    struct UtilsRingBuffer *rx_buffer; // rx ring buffer
+    uint32_t event; // event for receiving new data
+    api_response_callback_t response_cb; // callback function for response
+    void *user_data; // user data for callback function
+} api_service_context_t;
+
 typedef struct Token {
     uint8_t type;
     uint8_t value_type;

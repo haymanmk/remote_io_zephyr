@@ -15,6 +15,8 @@ target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 # Sources
 # file(GLOB_RECURSE app_sources src/*.c)
 file(GLOB_RECURSE app_sources
+    src/flash.c
+    src/settings.c
     src/digital_input.c
     src/utils.c
     src/api.c

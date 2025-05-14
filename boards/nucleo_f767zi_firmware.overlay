@@ -58,3 +58,19 @@
         };
     };
 };
+
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+
+        storage_partition_0: partition@10000 {
+            label = "storage-0";
+            reg = <0x00010000 DT_SIZE_K(32)>;
+        };
+
+        storage_partition_1: partition@18000 {
+            label = "storage-1";
+            reg = <0x00018000 DT_SIZE_K(32)>;
+        };
+    };
+};
