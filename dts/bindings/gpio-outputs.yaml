@@ -1,0 +1,28 @@
+description: |
+  GPIO outputs are used to control devices such as LEDs, relays, and other
+  peripherals. The GPIO output driver is responsible for configuring the GPIO
+  pins as outputs and controlling their state (high or low).
+
+  For example:
+  / {
+      user_outputs: gpio-outputs {
+          compatible = "gpio-outputs";
+          usr_output_0 {
+              label = "LED1";
+              gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+          };
+    };
+
+compatible: "gpio-outputs"
+
+child-binding:
+  description: GPIO output child node
+  properties:
+    gpios:
+      type: phandle-array
+      required: true
+
+    label:
+      type: string
+      description: Descriptive name of the GPIO output.
+      default: "GPIO output"

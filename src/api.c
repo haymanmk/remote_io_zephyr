@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include "uart.h"
 #include "ws28xx_pwm.h"
 #include "digital_input.h"
+#include "digital_output.h"
 #include "settings.h"
 #include "flash.h"
 
@@ -661,109 +662,127 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
             error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
         }
         break;
-    // case SERVICE_ID_OUTPUT:
-    // {
-    //     // check if token is valid
-    //     if (command_line->token == NULL)
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //         break;
-    //     }
+    case SERVICE_ID_OUTPUT:
+    {
+        // check if token is valid
+        if (command_line->token == NULL)
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+            break;
+        }
 
-    //     token_t* token = command_line->token;
+        token_t* token = command_line->token;
 
-    //     // get output index
-    //     int16_t output_index = token->i32;
+        // get output index
+        int16_t output_index = token->i32;
 
-    //     // execute output command
-    //     if (command_line->type == 'W')
-    //     {
-    //         // handle different variants of the command
-    //         switch (command_line->variant)
-    //         {
-    //             case 1: // write to multiple outputs
-    //             {
-    //                 // get the write value
-    //                 if (token == NULL)
-    //                 {
-    //                     error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                     break;
-    //                 }
-    //                 uint32_t data = token->i32;
+        // execute output command
+        if (command_line->type == 'W')
+        {
+            // handle different variants of the command
+            switch (command_line->variant)
+            {
+                case 1: // write to multiple outputs
+                {
+                    // get the write value
+                    if (token == NULL)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
+                    uint32_t data = token->i32;
 
-    //                 // get the start index
-    //                 token = token->next;
-    //                 if (token == NULL)
-    //                 {
-    //                     error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                     break;
-    //                 }
-    //                 uint8_t start_index = (uint8_t)token->i32;
+                    // get the start index
+                    token = token->next;
+                    if (token == NULL)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
+                    uint8_t start_index = (uint8_t)token->i32;
 
-    //                 // get the length
-    //                 token = token->next;
-    //                 if (token == NULL)
-    //                 {
-    //                     error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                     break;
-    //                 }
-    //                 uint8_t length = (uint8_t)token->i32;
+                    // check if parameter is valid
+                    if (start_index == 0 || start_index > DIGITAL_OUTPUT_MAX)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
 
-    //                 // write to multiple digital outputs
-    //                 digital_output_write_multiple(data, start_index, length);
+                    // get the length
+                    token = token->next;
+                    if (token == NULL)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
+                    uint8_t length = (uint8_t)token->i32;
 
-    //                 API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //                 break;
-    //             }
-    //             default: // write to single output
-    //             {
-    //                 // check if parameter is valid
-    //                 if (output_index == 0 || output_index >= DIGITAL_OUTPUT_MAX)
-    //                 {
-    //                     error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                     break;
-    //                 }
+                    // write to multiple digital outputs
+                    digital_output_write_multiple(data, start_index - 1, length);
 
-    //                 // get the write value
-    //                 token = token->next;
-    //                 if (token == NULL)
-    //                 {
-    //                     error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //                     break;
-    //                 }
-    //                 bool state = (token->i32 > 0) ? true : false;
+                    API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+                    break;
+                }
+                default: // write to single output
+                {
+                    // check if parameter is valid
+                    if (output_index == 0 || output_index >= DIGITAL_OUTPUT_MAX)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
 
-    //                 // write to the digital output
-    //                 digital_output_write(output_index, state);
+                    // get the write value
+                    token = token->next;
+                    if (token == NULL)
+                    {
+                        error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                        break;
+                    }
+                    bool state = (token->i32 > 0) ? true : false;
 
-    //                 API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     else if (command_line->type == 'R')
-    //     {
-    //         if (output_index == -1)
-    //         {
-    //             // read all the digital outputs
-    //             uint32_t state = digital_output_read_all();
-    //             // send the state to the client, format: "R<Service ID> <State>"
-    //             service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_OUTPUT, state);
-    //         }
-    //         else
-    //         {
-    //             // read the state of specified digital output
-    //             bool state = digital_output_read((uint8_t)output_index);
-    //             // send the state to the client, format: "R<Service ID> <Output Index> <State>"
-    //             service->response_cb(service->user_data, "R%d %d %d\r\n", SERVICE_ID_OUTPUT, output_index, state);
-    //         }
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // }
+                    // write to the digital output
+                    int ret = digital_output_write(output_index - 1, state);
+                    if (ret < 0)
+                    {
+                        error_code = API_ERROR_CODE_WRITE_DIGITAL_OUTPUT_FAILED;
+                        break;
+                    }
+
+                    API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+                    break;
+                }
+            }
+        }
+        else if (command_line->type == 'R')
+        {
+            if (output_index == -1)
+            {
+                // read all the digital outputs
+                uint32_t state = digital_output_read_all();
+                // send the state to the client, format: "R<Service ID> <State>"
+                service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_OUTPUT, state);
+            }
+            else
+            {
+                // check if parameter is valid
+                if (output_index == 0 || output_index > DIGITAL_OUTPUT_MAX)
+                {
+                    error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                    break;
+                }
+                // read the state of specified digital output
+                bool state = digital_output_read((uint8_t)output_index - 1);
+                // send the state to the client, format: "R<Service ID> <Output Index> <State>"
+                service->response_cb(service->user_data, "R%d %d %d\r\n", SERVICE_ID_OUTPUT, output_index, state);
+            }
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
+    }
     // case SERVICE_ID_PWM_WS28XX_LED:
     // {
     //     // check if token is valid

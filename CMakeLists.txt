@@ -18,6 +18,7 @@ file(GLOB_RECURSE app_sources
     src/flash.c
     src/settings.c
     src/digital_input.c
+    src/digital_output.c
     src/utils.c
     src/api.c
     src/ethernet_if.c
