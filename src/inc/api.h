@@ -39,14 +39,6 @@ enum {
     PARAM_TYPE_ANY,
 };
 
-// new data events
-#define API_EVENT_SERV_0 0x01
-#define API_EVENT_SERV_1 0x02
-#define API_EVENT_SERV_2 0x04
-#define API_EVENT_SERV_3 0x08
-#define API_EVENT_SERV_4 0x10
-#define API_EVENT_SERV_5 0x20
-
 /* Macros */
 // remove all the blank spaces when processing the command
 #define API_REMOVE_BLANK_SPACES(SERV) \

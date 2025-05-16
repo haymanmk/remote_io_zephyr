@@ -67,9 +67,6 @@ static K_THREAD_STACK_ARRAY_DEFINE(socket_service_stack_pool,
 // event for receiving new data
 extern struct k_event apiNewDataEvent;
 
-// event for settings loaded
-extern struct k_event settingsLoadedEvent;
-
 extern settings_t defaults;
 
 // get on-board user button GPIO spec
@@ -290,7 +287,7 @@ int tcp_server_init(void)
             return -ENOMEM;
         }
         service->service_context.rx_buffer->buffer = NULL;
-        service->service_context.event = GET_NEW_DATA_EVENT(i);
+        service->service_context.event =(1 << i);
         service->service_context.response_cb = (api_response_callback_t)&ethernet_if_respond_handler;
         service->service_context.user_data = service;
         service->stack = socket_service_stack_pool[i];

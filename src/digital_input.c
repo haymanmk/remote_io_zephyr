@@ -13,10 +13,6 @@ LOG_MODULE_REGISTER(digital_input, LOG_LEVEL_DBG);
 #define DIGITAL_INPUT_UPDATE_INTERVAL 1 // ms
 
 /* type definition */
-typedef struct Node {
-	struct Node *next;
-} node_t;
-
 typedef struct ServiceNode {
 	struct ServiceNode *next;
     digital_input_callback_fn_t cb;
@@ -33,9 +29,6 @@ typedef struct NodeSubscribedInputs {
 /* private functions */
 void digital_input_poll_task(void *parameters);
 struct gpio_dt_spec *digital_input_get_gpio_spec(uint8_t index);
-void digital_input_delete_node(node_t *node);
-void digital_input_append_node(node_t *node, node_t *head);
-void digital_input_remove_node(node_t *node, node_t *head);
 
 /* variables */
 // get gpio spec
@@ -120,11 +113,11 @@ void digital_input_poll_task(void *parameters)
 				// <State>"
 				// execute the callback function with user data and results for each
 				// subscriber.
-				service_node_t *service_current = current->services;
-				while (service_current != NULL) {
-					service_current->cb(service_current->user_data,
+				service_node_t *current_service = current->services;
+				while (current_service != NULL) {
+					current_service->cb(current_service->user_data,
 							    current->index, state);
-					service_current = service_current->next;
+					current_service = current_service->next;
 				}
 			}
 			current = current->next;
@@ -203,13 +196,15 @@ void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callb
 	while (current != NULL) {
 		if (current->index == index) {
 			// check if the service is already registered
-			service_node_t *service_current = current->services;
-			while (service_current != NULL) {
-				if (service_current == user_data) {
+			service_node_t *current_service = current->services;
+            service_node_t *prev_service = NULL;
+			while (current_service != NULL) {
+				if (current_service == user_data) {
 					// service is already registered
 					return;
 				}
-				service_current = service_current->next;
+                prev_service = current_service;
+				current_service = current_service->next;
 			}
 			// create a new service node
 			service_node_t *new_service_node =
@@ -222,12 +217,11 @@ void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callb
 			new_service_node->user_data = user_data;
 			new_service_node->next = NULL;
 			// add the service node to the linked list
-			if (current->services == NULL) {
-				current->services = new_service_node;
-			} else {
-				digital_input_append_node((node_t *)new_service_node,
-							  (node_t *)current->services);
-			}
+            if (prev_service == NULL) {
+                current->services = new_service_node;
+            } else {
+                prev_service->next = new_service_node;
+            }
 			return;
 		}
 		current = current->next;
@@ -257,17 +251,9 @@ void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callb
 	newNode->services = new_service_node;
 	// update its input state
 	newNode->state = digital_input_read(index);
-	// check if the head node is NULL
-	if (headNodeSubscribedInputs == NULL) {
-		headNodeSubscribedInputs = newNode;
-	} else {
-		// append the new node to the end of the list
-		digital_input_append_node((node_t *)newNode, (node_t *)headNodeSubscribedInputs);
-	}
+    // append the new node to the end of the list
+    utils_append_node((utils_node_t *)newNode, (utils_node_t *)headNodeSubscribedInputs);
 
-	/**
-	 * TODO: check if the task is already created
-	 */
 	// resume the task if it is suspended
 	k_thread_resume(digital_input_polling_task);
 }
@@ -281,38 +267,41 @@ void digital_input_unsubscribe(void *user_data, uint8_t index)
 
 	// check if it is already subscribed
 	node_subscribed_inputs_t *current = headNodeSubscribedInputs;
+    node_subscribed_inputs_t *prev = NULL;
 	while (current != NULL) {
 		if (current->index == index) {
             // remove service node from the linked list
-            service_node_t *service_current = current->services;
+            service_node_t *current_service = current->services;
             service_node_t *prev_service = NULL;
-            while (service_current != NULL) {
-                if (service_current->user_data == user_data) {
+            while (current_service != NULL) {
+                if (current_service->user_data == user_data) {
                     // remove the service node
                     if (prev_service == NULL) {
-                        current->services = service_current->next;
+                        current->services = current_service->next;
                     } else {
-                        prev_service->next = service_current->next;
+                        prev_service->next = current_service->next;
                     }
-                    free(service_current);
+                    free(current_service);
                     break;
                 }
-                prev_service = service_current;
-                service_current = service_current->next;
+                prev_service = current_service;
+                current_service = current_service->next;
             }
 
             // check if there are no more services subscribed to this digital input
             if (current->services == NULL) {
                 // remove the node from the linked list
-                if (headNodeSubscribedInputs == current) {
+                if (prev == NULL) {
                     headNodeSubscribedInputs = current->next;
                 } else {
-                    digital_input_remove_node((node_t *)current, (node_t *)headNodeSubscribedInputs);
+                    prev->next = current->next;
                 }
-			    digital_input_delete_node((node_t *)current);
+                // free the node
+			    utils_free_node((utils_node_t *)current);
             }
 			return;
 		}
+        prev = current;
 		current = current->next;
 	}
 }
@@ -321,13 +310,13 @@ void digital_input_unsubscribe_all(void *user_data)
 {
     node_subscribed_inputs_t *current = headNodeSubscribedInputs;
     while (current != NULL) {
-        service_node_t *service_current = current->services;
-        while (service_current != NULL) {
-            if (service_current->user_data == user_data) {
+        service_node_t *current_service = current->services;
+        while (current_service != NULL) {
+            if (current_service->user_data == user_data) {
                 digital_input_unsubscribe(user_data, current->index);
                 break;
             }
-            service_current = service_current->next;
+            current_service = current_service->next;
         }
         current = current->next;
     }
@@ -343,12 +332,12 @@ restart:
 	while (current != NULL) {
         // go through the linked list of services
         // check if the user_data is equal to the service of the current node
-        service_node_t *service_current = current->services;
-        while (service_current != NULL) {
-            if (service_current->user_data == user_data) {
+        service_node_t *current_service = current->services;
+        while (current_service != NULL) {
+            if (current_service->user_data == user_data) {
                 break;
             }
-            if ((service_current = service_current->next) == NULL) {
+            if ((current_service = current_service->next) == NULL) {
                 current = current->next;
                 goto restart;
             }
@@ -358,54 +347,6 @@ restart:
 		current = current->next;
 		if (current != NULL) {
             cb(user_data, " ");
-		}
-	}
-}
-
-// delete a node for the subscribed digital input
-void digital_input_delete_node(node_t *node)
-{
-	node->next = NULL;
-	free(node);
-}
-
-// append a node to the linked list
-void digital_input_append_node(node_t *node, node_t *head)
-{
-	if (head == NULL) {
-		head = node;
-	} else {
-		node_t *current = head;
-		// find the last node
-		while (current->next != NULL) {
-			current = current->next;
-		}
-		// append the new node to the end of the list
-		current->next = node;
-	}
-}
-
-// remove a node from the linked list
-void digital_input_remove_node(node_t *node, node_t *head)
-{
-	if (head == NULL) {
-		return;
-	}
-
-	if (head == node) {
-		node_subscribed_inputs_t *temp = (node_subscribed_inputs_t *)head;
-		head = head->next;
-		temp->next = NULL;
-	} else {
-		node_subscribed_inputs_t *current = headNodeSubscribedInputs;
-        node_subscribed_inputs_t *_node = (node_subscribed_inputs_t *)node;
-		while (current->next != NULL) {
-			if (current->next == _node) {
-				current->next = _node->next;
-				_node->next = NULL;
-				break;
-			}
-			current = current->next;
 		}
 	}
 }

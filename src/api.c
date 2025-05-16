@@ -475,6 +475,15 @@ static void api_sub_input_cb(void *user_data, uint8_t index, bool state)
     service->response_cb(service->user_data, "S%d %d %d\r\n", SERVICE_ID_SUBSCRIBE_INPUT, index + 1, state);
 }
 
+static void api_uart_cb(void *user_data, void *data, uint8_t length, uint8_t uart_index)
+{
+    /**
+     * TODO:
+     */
+    // print prefix beforehand; format: "R<Service ID>.<UART index> "
+    ethernet_if_send(user_data, "R%d.%d ", SERVICE_ID_SERIAL, uart_index);
+}
+
 // execute the command
 void api_execute_command(api_service_context_t *service, command_line_t *command_line)
 {
@@ -507,51 +516,51 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
             error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
         }
         break;
-    // case SERVICE_ID_SERIAL:
-    //     // execute serial command
-    //     if (command_line->type == 'W')
-    //     {
-    //         // search for the message token and ingore the length token
-    //         token_t* token = command_line->token;
-    //         uint8_t length = 0;
-    //         while (token != NULL)
-    //         {
-    //             if (token->type == TOKEN_TYPE_LENGTH)
-    //             {
-    //                 length = token->i32;
-    //             }
-    //             else if (token->value_type == PARAM_TYPE_ANY)
-    //             {
-    //                 break;
-    //             }
-    //             token = token->next;
-    //         }
-    //         // check if the token is found
-    //         if (token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //         }
-    //         else
-    //         {
-    //             // ensure the index of uart is valid
-    //             if (command_line->variant >= UART_MAX)
-    //             {
-    //                 error_code = API_ERROR_CODE_INVALID_COMMAND_VARIANT;
-    //                 break;
-    //             }
-    //             // send the message to the serial port
-    //             uart_printf((uart_index_t)(command_line->variant), (uint8_t*)token->any, length);
-    //             // clear param buffer
-    //             memset(anyTypeBuffer, '\0', sizeof(anyTypeBuffer));
-    //             // reply with default response
-    //             API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //         }
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
+    case SERVICE_ID_SERIAL:
+        // execute serial command
+        if (command_line->type == 'W')
+        {
+            // search for the message token and ingore the length token
+            token_t* token = command_line->token;
+            uint8_t length = 0;
+            while (token != NULL)
+            {
+                if (token->type == TOKEN_TYPE_LENGTH)
+                {
+                    length = token->i32;
+                }
+                else if (token->value_type == PARAM_TYPE_ANY)
+                {
+                    break;
+                }
+                token = token->next;
+            }
+            // check if the token is found
+            if (token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+            }
+            else
+            {
+                // ensure the index of uart is valid
+                if (command_line->variant >= UART_MAX)
+                {
+                    error_code = API_ERROR_CODE_INVALID_COMMAND_VARIANT;
+                    break;
+                }
+                // send the message to the serial port
+                uart_printf((uart_index_t)(command_line->variant), (uint8_t*)token->any, length);
+                // clear param buffer
+                memset(anyTypeBuffer, '\0', sizeof(anyTypeBuffer));
+                // reply with default response
+                API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+            }
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+        }
+        break;
     case SERVICE_ID_INPUT:
         // execute input command
         if (command_line->type == 'R')

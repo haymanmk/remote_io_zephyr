@@ -22,16 +22,6 @@
 #define TCP_SERV_DEFINE_N(SERV_HANDLER, N) \
         LISTIFY(N, _TCP_SERV_DEFINE, (;), SERV_HANDLER)
 
-// get new data event
-#define GET_NEW_DATA_EVENT(INDX) \
-        INDX == 0 ? API_EVENT_SERV_0 : \
-        INDX == 1 ? API_EVENT_SERV_1 : \
-        INDX == 2 ? API_EVENT_SERV_2 : \
-        INDX == 3 ? API_EVENT_SERV_3 : \
-        INDX == 4 ? API_EVENT_SERV_4 : \
-        INDX == 5 ? API_EVENT_SERV_5 : \
-        0
-
 // define a struct to hold socket service information
 typedef struct ethernet_if_socket_service {
         api_service_context_t service_context;

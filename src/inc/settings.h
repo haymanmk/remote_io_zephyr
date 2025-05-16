@@ -1,6 +1,7 @@
 #ifndef __SETTINGS_H
 #define __SETTINGS_H
 
+#include <zephyr/kernel.h>
 #include "stm32f7xx_remote_io.h"
 #include "uart.h"
 
@@ -73,6 +74,9 @@ typedef struct
 } settings_t;
 
 extern settings_t settings;
+// event for settings loaded
+extern struct k_event settingsLoadedEvent;
+
 
 /* Export functions */
 void settings_init();

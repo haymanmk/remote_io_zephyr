@@ -2,6 +2,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(settings, LOG_LEVEL_DBG);
 
+#include <zephyr/drivers/uart.h>
 #include <zephyr/net/net_if.h>
 
 #include "stm32f7xx_remote_io.h"
@@ -39,18 +40,18 @@ const settings_t defaults = {
     .tcp_port = 0, // this value will be added to 8500 as the final tcp port, i.e. 8500 + tcp_port
     .uart = {
         {
-            .baudrate = 115200,
-            .data_bits = UART_WORDLENGTH_8B,
-            .stop_bits = UART_STOPBITS_1,
-            .parity = UART_PARITY_NONE,
-            .flow_control = 0,
+            .baudrate = 19200,
+            .data_bits = UART_CFG_DATA_BITS_8,
+            .stop_bits = UART_CFG_STOP_BITS_1,
+            .parity = UART_CFG_PARITY_NONE,
+            .flow_control = UART_CFG_FLOW_CTRL_NONE,
         },
         {
             .baudrate = 9600,
-            .data_bits = UART_WORDLENGTH_8B,
-            .stop_bits = UART_STOPBITS_1,
-            .parity = UART_PARITY_NONE,
-            .flow_control = 0,
+            .data_bits = UART_CFG_DATA_BITS_8,
+            .stop_bits = UART_CFG_STOP_BITS_1,
+            .parity = UART_CFG_PARITY_NONE,
+            .flow_control = UART_CFG_FLOW_CTRL_NONE,
         },
     },
     .pwmws288xx_1 = {

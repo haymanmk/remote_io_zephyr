@@ -12,6 +12,11 @@ typedef struct UtilsRingBuffer {
     uint8_t size; // buffer size
 } utils_ring_buffer_t;
 
+// node for linked list
+typedef struct UtilsNode {
+    struct UtilsNode *next; // next node
+} utils_node_t;
+
 /* Macros */
 #define UTILS_INCREMENT_BUFFER_HEAD(HEAD, TAIL, SIZE) \
     do { \
@@ -46,5 +51,8 @@ io_status_t utils_is_buffer_empty(utils_ring_buffer_t *buffer);
 io_status_t utils_is_buffer_full(utils_ring_buffer_t *buffer);
 io_status_t utils_append_to_buffer(utils_ring_buffer_t *buffer, char *data, uint8_t len);
 io_status_t utils_pop_from_buffer(utils_ring_buffer_t *buffer, char *data);
+io_status_t utils_free_node(utils_node_t *node);
+io_status_t utils_append_node(utils_node_t *node, utils_node_t *head);
+io_status_t utils_remove_node(utils_node_t *node, utils_node_t *head);
 
 #endif
