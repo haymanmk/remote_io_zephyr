@@ -4,7 +4,6 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include <stdarg.h>
 #include <zephyr/kernel.h>
 #include "stm32f7xx_remote_io.h"
-#include "ethernet_if.h"
 #include "system_info.h"
 #include "api.h"
 #include "uart.h"
@@ -39,6 +38,7 @@ void api_reset_command_line();
 io_status_t api_process_data(api_service_context_t *service, command_line_t *command_line);
 void api_execute_command(api_service_context_t *service, command_line_t *command_line);
 void api_error(api_service_context_t *service, uint16_t error_code);
+static void api_uart_cb(void *user_data, void *data, uint8_t length, uint8_t uart_index);
 
 // event for receiving new data
 K_EVENT_DEFINE(apiNewDataEvent);
@@ -56,6 +56,12 @@ void api_task(void *p1, void *p2, void *p3)
     // unused parameters
     (void)p2;
     (void)p3;
+
+    // set uart listener callback
+    for (uint8_t i = 0; i < UART_MAX; i++)
+    {
+        uart_listener_callback_set(i, &api_uart_cb, (void *)service);
+    }
 
     command_line_t command_line = {0}; // store command line data
 
@@ -477,11 +483,14 @@ static void api_sub_input_cb(void *user_data, uint8_t index, bool state)
 
 static void api_uart_cb(void *user_data, void *data, uint8_t length, uint8_t uart_index)
 {
-    /**
-     * TODO:
-     */
+    api_service_context_t *service = (api_service_context_t *)user_data;
+    // check if the user data is valid
+    if (service == NULL)
+    {
+        return;
+    }
     // print prefix beforehand; format: "R<Service ID>.<UART index> "
-    ethernet_if_send(user_data, "R%d.%d ", SERVICE_ID_SERIAL, uart_index);
+    service->response_cb(user_data, "R%d.%d %s\r\n", SERVICE_ID_SERIAL, uart_index, data);
 }
 
 // execute the command

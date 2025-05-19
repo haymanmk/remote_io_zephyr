@@ -3,6 +3,7 @@
 #include "digital_output.h"
 #include "flash.h"
 #include "settings.h"
+#include "uart.h"
 
 int main(void) {
     // initialize flash memory
@@ -16,6 +17,9 @@ int main(void) {
 
     // initialize digital output
     digital_output_init();
+
+    // initialize UART
+    uart_init();
 
     tcp_server_init();
 

@@ -36,11 +36,12 @@ static listener_t *headListener[UART_MAX] = { NULL };
 // mutex lock
 static K_MUTEX_DEFINE(uartLock);
 
-utils_ring_buffer_t rxBuffer[UART_MAX]; // ring buffer for UART RX
+utils_ring_buffer_t uart_rx_buffer[UART_MAX]; // ring buffer for UART RX
+char rxBuffer[UART_MAX][UART_RX_BUFFER_SIZE]; // ring buffer for UART RX
 static uart_context_t uartContext[UART_MAX]; // UART context
 
 // create a thread for processing RX data
-K_KERNEL_THREAD_DEFINE(uart_process_rx_task, CONFIG_REMOTEIO_MINIMAL_STACK_SIZE * 2,
+K_KERNEL_THREAD_DEFINE(uart_process_rx_task, 2048,
                        uart_process_rx, NULL, NULL, NULL,
                        CONFIG_REMOTEIO_SERVICE_PRIORITY + 1, 0, 500);
 
@@ -116,7 +117,7 @@ void uart_init()
             return;
         }
         // set uart irq and callback to receive data
-        if ((ret =uart_irq_callback_user_data_set(uart_dev[i], uart_callback, &uartContext[i])) < 0)
+        if ((ret =uart_irq_callback_user_data_set(uart_dev[i], &uart_callback, &uartContext[i])) < 0)
         {
             LOG_ERR("Failed to set UART callback for UART%d: %d\n", i, ret);
             return;
@@ -125,7 +126,11 @@ void uart_init()
         uart_irq_rx_enable(uart_dev[i]);
 
         // intialize uart context
-        uartContext[i].rx_buffer = &rxBuffer[i];
+        uartContext[i].rx_buffer = &uart_rx_buffer[i];
+        uartContext[i].rx_buffer->buffer = &rxBuffer[i][0];
+        uartContext[i].rx_buffer->size = UART_RX_BUFFER_SIZE;
+        uartContext[i].rx_buffer->head = 0;
+        uartContext[i].rx_buffer->tail = 0;
         uartContext[i].events = 0;
     }
 }
