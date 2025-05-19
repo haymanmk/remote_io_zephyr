@@ -20,6 +20,7 @@ file(GLOB_RECURSE app_sources
     src/settings.c
     src/digital_input.c
     src/digital_output.c
+    src/ws28xx_gpio.c
     src/utils.c
     src/api.c
     src/ethernet_if.c

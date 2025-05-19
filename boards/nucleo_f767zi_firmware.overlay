@@ -1,5 +1,6 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/led/led.h>
 
 / {
     chosen {
@@ -109,6 +110,21 @@
             gpios = <&gpiod 13 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
         };
     };
+
+    /* WS2812-gpio, LED Strip */
+    led_strip: ws2812 {
+        compatible = "worldsemi,ws2812-gpio";
+        chain-length = <25>;
+        color-mapping = <LED_COLOR_ID_GREEN
+                        LED_COLOR_ID_RED
+                        LED_COLOR_ID_BLUE>;
+        gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
+        reset-delay = <50>;
+        delay-t0h = <40>;
+        delay-t1h = <80>;
+        delay-t0l = <85>;
+        delay-t1l = <45>;
+    };
 };
 
 &flash0 {
@@ -140,4 +156,8 @@
     pinctrl-names = "default";
     current-speed = <9600>;
     status = "okay";
+};
+
+&spi1 {
+    status = "disabled";
 };

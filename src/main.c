@@ -4,6 +4,7 @@
 #include "flash.h"
 #include "settings.h"
 #include "uart.h"
+#include "ws28xx_gpio.h"
 
 int main(void) {
     // initialize flash memory
@@ -20,6 +21,9 @@ int main(void) {
 
     // initialize UART
     uart_init();
+
+    // initialize WS28XX GPIO
+    ws28xx_gpio_init();
 
     tcp_server_init();
 

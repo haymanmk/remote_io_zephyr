@@ -7,7 +7,7 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include "system_info.h"
 #include "api.h"
 #include "uart.h"
-#include "ws28xx_pwm.h"
+#include "ws28xx_gpio.h"
 #include "digital_input.h"
 #include "digital_output.h"
 #include "settings.h"
@@ -44,8 +44,6 @@ static void api_uart_cb(void *user_data, void *data, uint8_t length, uint8_t uar
 K_EVENT_DEFINE(apiNewDataEvent);
 
 static char anyTypeBuffer[UART_TX_BUFFER_SIZE] = {'\0'}; // store data for ANY type
-
-extern ws_color_t ws28xx_pwm_color[NUMBER_OF_LEDS];
 
 
 void api_task(void *p1, void *p2, void *p3)
@@ -801,83 +799,78 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
         }
         break;
     }
-    // case SERVICE_ID_PWM_WS28XX_LED:
-    // {
-    //     // check if token is valid
-    //     if (command_line->token == NULL)
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //         break;
-    //     }
+    case SERVICE_ID_GPIO_WS28XX_LED:
+    {
+        // check if token is valid
+        if (command_line->token == NULL)
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+            break;
+        }
 
-    //     token_t* token = command_line->token;
+        token_t* token = command_line->token;
 
-    //     // get the LED index
-    //     uint16_t led_index = token->i32;
+        // get the LED index
+        uint16_t led_index = token->i32;
 
-    //     // check if parameter is valid
-    //     if (led_index >= NUMBER_OF_LEDS)
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //         break;
-    //     }
+        // execute WS28XX LED command
+        if (command_line->type == 'W')
+        {
+            // get the color of the LED
+            token = token->next;
+            if (token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //     // execute WS28XX LED command
-    //     if (command_line->type == 'W')
-    //     {
-    //         // get the color of the LED
-    //         token = token->next;
-    //         if (token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+            // get the color of the LED
+            uint8_t r = (uint8_t)token->i32;
+            token = token->next;
+            if (token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //         // get the color of the LED
-    //         uint8_t r = (uint8_t)token->i32;
-    //         token = token->next;
-    //         if (token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+            uint8_t g = (uint8_t)token->i32;
+            token = token->next;
+            if (token == NULL)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
 
-    //         uint8_t g = (uint8_t)token->i32;
-    //         token = token->next;
-    //         if (token == NULL)
-    //         {
-    //             error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
-    //             break;
-    //         }
+            uint8_t b = (uint8_t)token->i32;
 
-    //         uint8_t b = (uint8_t)token->i32;
-
-    //         // set the color of the LED
-    //         if (ws28xx_pwm_set_color(r, g, b, led_index) != HAL_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_SET_LED_COLOR_FAILED;
-    //         }
-
-    //         // update the LED
-    //         if (ws28xx_pwm_update() != HAL_OK)
-    //         {
-    //             error_code = API_ERROR_CODE_UPDATE_LED_FAILED;
-    //         }
-    //         else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
-    //     }
-    //     else if (command_line->type == 'R')
-    //     {
-    //         // read the color of the LED
-    //         ws_color_t color = ws28xx_pwm_color[led_index];
-    //         // send the color to the client, format: "R<Service ID> <LED Index> <R> <G> <B>"
-    //         service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SERVICE_ID_PWM_WS28XX_LED, led_index, color.r, color.g, color.b);
-    //     }
-    //     else
-    //     {
-    //         error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
-    //     }
-    //     break;
-    // }
+            // set the color of the LED
+            if (ws28xx_gpio_set_color(r, g, b, led_index) != 0)
+            {
+                error_code = API_ERROR_CODE_SET_LED_COLOR_FAILED;
+                break;
+            }
+            else API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+        }
+        else if (command_line->type == 'R')
+        {
+            // read the color of the LED
+            uint8_t r = 0, g = 0, b = 0;
+            // get the color of the LED
+            if (ws28xx_gpio_get_color(&r, &g, &b, led_index) != 0)
+            {
+                error_code = API_ERROR_CODE_GET_LED_COLOR_FAILED;
+                break;
+            }
+            // send the color to the client, format: "R<Service ID> <LED Index> <R> <G> <B>"
+            service->response_cb(service->user_data, "R%d %d %d %d %d\r\n", SERVICE_ID_GPIO_WS28XX_LED, led_index, r, g, b);
+        }
+        else
+        {
+            error_code = API_ERROR_CODE_INVALID_COMMAND_TYPE;
+            break;
+        }
+        break;
+    }
     case SETTING_ID_IP_ADDRESS:
         if (command_line->type == 'R')
         {
