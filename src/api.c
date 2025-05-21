@@ -1,5 +1,5 @@
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(api, LOG_LEVEL_INF);
 
 #include <stdarg.h>
 #include <zephyr/kernel.h>
@@ -7,11 +7,16 @@ LOG_MODULE_REGISTER(api, LOG_LEVEL_DBG);
 #include "system_info.h"
 #include "api.h"
 #include "uart.h"
-#include "ws28xx_gpio.h"
 #include "digital_input.h"
 #include "digital_output.h"
 #include "settings.h"
 #include "flash.h"
+
+#ifdef CONFIG_REMOTEIO_USE_MY_WS28XX
+#include "ws28xx_pwm.h"
+#else
+#include "ws28xx_led.h"
+#endif
 
 #define PARAM_STR_MAX_LENGTH    MAX_INT_DIGITS+2 // 1 for sign, 1 for null terminator
 
@@ -487,8 +492,28 @@ static void api_uart_cb(void *user_data, void *data, uint8_t length, uint8_t uar
     {
         return;
     }
-    // print prefix beforehand; format: "R<Service ID>.<UART index> "
-    service->response_cb(user_data, "R%d.%d %s\r\n", SERVICE_ID_SERIAL, uart_index, data);
+    // check if the data is valid
+    if (data == NULL || length == 0)
+    {
+        return;
+    }
+    // check if the length is valid
+    if (length > UART_TX_BUFFER_SIZE)
+    {
+        length = UART_TX_BUFFER_SIZE;
+    }
+    // create a tx buffer
+    uint8_t txBuffer[UART_TX_BUFFER_SIZE] = {'\0'};
+    sprintf(txBuffer, "R%d.%d ", SERVICE_ID_SERIAL, uart_index);
+    size_t txBuffIndex = strlen(txBuffer);
+    // copy the data to the tx buffer
+    memcpy(txBuffer + txBuffIndex, data, length);
+    // append new line
+    txBuffIndex += length;
+    txBuffer[txBuffIndex++] = '\r';
+    txBuffer[txBuffIndex++] = '\n';
+    // send the data to the client
+    service->response_cb_bytes(service->user_data, txBuffer, txBuffIndex);
 }
 
 // execute the command
@@ -844,7 +869,7 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
             uint8_t b = (uint8_t)token->i32;
 
             // set the color of the LED
-            if (ws28xx_gpio_set_color(r, g, b, led_index) != 0)
+            if (ws28xx_led_set_color(r, g, b, led_index) != 0)
             {
                 error_code = API_ERROR_CODE_SET_LED_COLOR_FAILED;
                 break;
@@ -856,7 +881,7 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
             // read the color of the LED
             uint8_t r = 0, g = 0, b = 0;
             // get the color of the LED
-            if (ws28xx_gpio_get_color(&r, &g, &b, led_index) != 0)
+            if (ws28xx_led_get_color(&r, &g, &b, led_index) != 0)
             {
                 error_code = API_ERROR_CODE_GET_LED_COLOR_FAILED;
                 break;

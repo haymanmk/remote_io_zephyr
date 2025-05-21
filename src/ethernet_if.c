@@ -1,5 +1,5 @@
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_INF);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +43,8 @@ static int close_socket_service(ethernet_if_socket_service_t *service);
 static ethernet_if_socket_service_t *register_client_at_socket_service(int client);
 static int unregister_client_at_socket_service(int client);
 static int unregister_all_clients_at_socket_service(void);
-void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const char *format_string, ...);
+void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const char *format, ...);
+void ethernet_if_respond_raw_bytes_handler(ethernet_if_socket_service_t *service, const uint8_t *buf, size_t len);
 
 
 // define the locking mechanism
@@ -151,7 +152,7 @@ static void receive_data(struct net_socket_service_event *pev,
         zsock_close(client);
         LOG_INF("Connection to %s closed", inet_ntoa(addr.sin_addr));
     } else {
-        LOG_INF("Received message: %.*s", rev_len, buf);
+        LOG_DBG("Received message: %.*s", rev_len, buf);
         if (service == NULL) {
             LOG_ERR("Failed to get socket service");
             return;
@@ -289,6 +290,7 @@ int tcp_server_init(void)
         service->service_context.rx_buffer->buffer = NULL;
         service->service_context.event =(1 << i);
         service->service_context.response_cb = (api_response_callback_t)&ethernet_if_respond_handler;
+        service->service_context.response_cb_bytes = (api_response_callback_t)&ethernet_if_respond_raw_bytes_handler;
         service->service_context.user_data = service;
         service->stack = socket_service_stack_pool[i];
         // add the service to the table
@@ -648,7 +650,7 @@ int ethernet_if_send(ethernet_if_socket_service_t *service, const char *format_s
         goto exit;
     }
 
-    LOG_INF("Sent data: %s", buffer);
+    LOG_DBG("Sent data: %s", buffer);
 
 exit:
     // unlock the mutex
@@ -656,7 +658,44 @@ exit:
     return ret;
 }
 
-void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const char *format_string, ...)
+int ethernet_if_send_raw_bytes(ethernet_if_socket_service_t *service, const uint8_t *buf, size_t len)
+{
+    if (service == NULL) {
+        return -1;
+    }
+
+    int ret = 0;
+
+    // lock the mutex
+    k_mutex_lock(&lock_sock_send, K_FOREVER);
+
+    // check if the client is still connected
+    if (service->poll_fds.fd == -1) {
+        LOG_ERR("Client is not connected");
+        ret = -1;
+        goto exit;
+    }
+
+    // send data to the client
+    ret = zsock_send(service->poll_fds.fd, buf, len, 0);
+    if (ret < 0) {
+        LOG_ERR("Failed to send data: %d", -errno);
+        goto exit;
+    }
+    LOG_DBG("Sent data: %.*s", len, buf);
+exit:
+    // unlock the mutex
+    k_mutex_unlock(&lock_sock_send);
+    return ret;
+}
+
+/**
+ * @brief   Respond to the client with a formatted string
+ * @param   service  pointer to the socket service
+ * @param   format   format string
+ * @return  void
+ */
+void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const char *format, ...)
 {
     if (service == NULL) {
         return;
@@ -664,10 +703,25 @@ void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const ch
 
     char buffer[MAX_TX_BUFFER_SIZE] = {'\0'};
     va_list args;
-    va_start(args, format_string);
-    vsnprintf(buffer, sizeof(buffer), format_string, args);
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
 
-    // send data to the client
     ethernet_if_send(service, "%s", buffer);
+}
+
+/**
+ * @brief   Respond to the client with raw bytes
+ * @param   service  pointer to the socket service
+ * @param   buf      pointer to the buffer
+ * @param   len      length of the buffer
+ * @return  void
+ */
+void ethernet_if_respond_raw_bytes_handler(ethernet_if_socket_service_t *service, const uint8_t *buf, size_t len)
+{
+    if (service == NULL) {
+        return;
+    }
+
+    ethernet_if_send_raw_bytes(service, buf, len);
 }

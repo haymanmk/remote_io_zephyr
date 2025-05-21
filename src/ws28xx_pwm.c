@@ -1,4 +1,6 @@
+#include <soc.h>
 #include "stm32f7xx_remote_io.h"
+#include "ws28xx_pwm.h"
 
 // buffer for the PWM data
 static uint32_t ws28xx_pwm_buffer[WS28XX_PWM_BUFFER_SIZE] = {0};
@@ -243,6 +245,22 @@ void ws28xx_pwm_dma_complete_callback(void)
 
     // enable the interrupt
     __enable_irq();
+}
+
+int ws28xx_pwm_get_color(uint8_t *r, uint8_t *g, uint8_t *b, uint16_t led)
+{
+    // check if the LED index is valid
+    if (led >= NUMBER_OF_LEDS)
+    {
+        return -1;
+    }
+
+    // get the color of the LED
+    *r = ws28xx_pwm_color[led].r;
+    *g = ws28xx_pwm_color[led].g;
+    *b = ws28xx_pwm_color[led].b;
+
+    return 0;
 }
 
 HAL_StatusTypeDef __ws28xx_pwm_dma_stop(void)

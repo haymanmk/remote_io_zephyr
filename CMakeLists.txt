@@ -13,6 +13,10 @@ project(remote_io_zephyr)
 target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 
 # Sources
+zephyr_library_sources_ifdef(CONFIG_REMOTEIO_USE_MY_WS28XX
+    src/ws28xx_pwm.c)
+zephyr_library_sources_ifndef(CONFIG_REMOTEIO_USE_MY_WS28XX
+    src/ws28xx_led.c)
 # file(GLOB_RECURSE app_sources src/*.c)
 file(GLOB_RECURSE app_sources
     src/uart.c
@@ -20,7 +24,6 @@ file(GLOB_RECURSE app_sources
     src/settings.c
     src/digital_input.c
     src/digital_output.c
-    src/ws28xx_gpio.c
     src/utils.c
     src/api.c
     src/ethernet_if.c

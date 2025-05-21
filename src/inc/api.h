@@ -70,7 +70,8 @@ typedef void (*api_response_callback_t)(void *user_data, ...);
 typedef struct APIServiceContext {
     struct UtilsRingBuffer *rx_buffer; // rx ring buffer
     uint32_t event; // event for receiving new data
-    api_response_callback_t response_cb; // callback function for response
+    api_response_callback_t response_cb; // callback function for response, which is used to send string
+    api_response_callback_t response_cb_bytes; // callback function for response, which is used to send bytes 
     void *user_data; // user data for callback function
 } api_service_context_t;
 

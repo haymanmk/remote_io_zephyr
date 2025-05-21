@@ -26,4 +26,15 @@ mainmenu "Remote I/O Config"
             The lower the number, the higher the priority.
             The actual priority may be affected by other tasks in the system.
 
+    config REMOTEIO_USE_MY_WS28XX
+        bool "Use my WS28XX"
+        default n
+        depends on LED_STRIP
+        select USE_STM32_HAL_TIM
+        select USE_STM32_HAL_GPIO
+        select USE_STM32_HAL_DMA
+        help
+            Use my WS28XX library for controlling the WS28XX LED strip.
+            If not selected, the default WS28XX library will be used.
+
 source "Kconfig.zephyr"

@@ -73,6 +73,8 @@ static void uart_callback(const struct device *dev, void *user_data)
         else // set the start receive event
             uartCtx->events |= UART_EVENT_START_RCV;
 
+        // append the character to the rx buffer
+        utils_append_to_buffer(uartCtx->rx_buffer, &c, 1);
         // check if the character is a new line
         if (c == '\r' || c == '\n')
         {
@@ -82,8 +84,6 @@ static void uart_callback(const struct device *dev, void *user_data)
             uartCtx->events &= ~UART_EVENT_START_RCV;
             k_sem_give(&rxNewLineSem);
         }
-        // append the character to the rx buffer
-        utils_append_to_buffer(uartCtx->rx_buffer, &c, 1);
     }
 }
 
@@ -160,7 +160,7 @@ void uart_process_rx(void *parameters)
             // process the rx buffer
             // tx buffer
             char txBuffer[UART_TX_BUFFER_SIZE] = {'\0'};
-            uint8_t txBuffIndex = 0;
+            volatile uint8_t txBuffIndex = 0;
             char c;
             while (utils_pop_from_buffer(uartCtx.rx_buffer, &c) == STATUS_OK)
             {
@@ -181,6 +181,7 @@ void uart_process_rx(void *parameters)
                         }
                         current->cb(current->user_data, txBuffer, txBuffIndex, i);
                         current = current->next;
+                        LOG_HEXDUMP_DBG(txBuffer, txBuffIndex, "UART RX");
                     }
                     // reset the tx buffer
                     txBuffIndex = 0;
@@ -211,7 +212,7 @@ int uart_printf(uart_index_t uart_index, const uint8_t *data, uint8_t len)
         uart_poll_out(uart_dev[uart_index], data[i]);
     }
 
-    LOG_DBG("UART%d: %s\n", uart_index, data);
+    LOG_HEXDUMP_DBG(data, len, "UART TX");
 
     return STATUS_OK;
 }

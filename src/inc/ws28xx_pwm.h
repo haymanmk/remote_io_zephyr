@@ -80,5 +80,13 @@ void ws28xx_pwm_set_color_all_off(void);
 HAL_StatusTypeDef ws28xx_pwm_update(void);
 void ws28xx_pwm_dma_half_complete_callback(void);
 void ws28xx_pwm_dma_complete_callback(void);
+int ws28xx_pwm_get_color(uint8_t *r, uint8_t *g, uint8_t *b, uint16_t led);
+
+#define ws28xx_led_init() ws28xx_pwm_init(NULL, 0)
+#define ws28xx_led_set_color(r, g, b, led) ws28xx_pwm_set_color(r, g, b, led)
+#define ws28xx_led_set_color_all(r, g, b) ws28xx_pwm_set_color_all(r, g, b)
+#define ws28xx_led_set_color_all_off() ws28xx_pwm_set_color_all_off()
+#define ws28xx_led_update() ws28xx_pwm_update()
+#define ws28xx_led_get_color(r, g, b, led) ws28xx_pwm_get_color(r, g, b, led)
 
 #endif // WS28XX_PWM_H
