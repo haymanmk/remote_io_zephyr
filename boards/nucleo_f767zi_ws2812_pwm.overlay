@@ -1,0 +1,25 @@
+#include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+
+&timers3 {
+    pwm_tim3: pwm {
+        pinctrl-0 = <&tim3_ch1_pa6>;
+        pinctrl-names = "default";
+        status = "okay";
+    };
+};
+
+/ {
+    led_strip: ws2812 {
+        compatible = "worldsemi,ws2812-pwm";
+        chain-length = <25>;
+        color-mapping = <LED_COLOR_ID_GREEN
+                        LED_COLOR_ID_RED
+                        LED_COLOR_ID_BLUE>;
+        pwms = <&pwm_tim3 1 120 (PWM_POLARITY_NORMAL)>;
+        delay-t1h = <48>;
+        delay-t1l = <32>;
+        delay-t0h = <16>;
+        delay-t0l = <32>;
+    };
+};

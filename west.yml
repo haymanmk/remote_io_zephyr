@@ -5,3 +5,8 @@ manifest:
       revision: main
       path: modules/mender-mcu
       import: true
+    - name: ws2812-pwm
+      url: https://github.com/haymanmk/ws2812-pwm.git
+      revision: main
+      path: modules/ws2812-pwm
+      import: true

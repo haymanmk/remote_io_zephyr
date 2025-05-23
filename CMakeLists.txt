@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 3.20.0)
 set(KCONFIG_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Kconfig")
 
 # Device tree overlay file
-set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/nucleo_f767zi_firmware.overlay")
+set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/nucleo_f767zi_firmware.overlay"
+    "${CMAKE_CURRENT_SOURCE_DIR}/boards/nucleo_f767zi_ws2812_pwm.overlay")
 
 # Declare project
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})

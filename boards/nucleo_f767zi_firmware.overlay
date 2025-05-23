@@ -1,6 +1,5 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
-#include <zephyr/dt-bindings/led/led.h>
 
 / {
     chosen {
@@ -141,28 +140,4 @@
     pinctrl-names = "default";
     current-speed = <9600>;
     status = "okay";
-};
-
-&spi1 {
-    pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pb5>;
-};
-
-&arduino_spi {
-    led_strip: ws2812@0 {
-        compatible = "worldsemi,ws2812-spi";
-
-        /* SPI */
-        reg = <0>;
-        spi-max-frequency = <4000000>;
-        frame-format = <32768>; /* SPI_FRAME_FORMAT_TI */
-
-        /* WS2812 */
-        chain-length = <25>;
-        spi-one-frame = <0x70>;
-        spi-zero-frame = <0x40>;
-        reset-delay = <50>; /* microseconds */
-        color-mapping = <LED_COLOR_ID_GREEN
-                        LED_COLOR_ID_RED
-                        LED_COLOR_ID_BLUE>;
-    };
 };

@@ -1,0 +1,25 @@
+-- west build: making build dir /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/build pristine
+-- west build: generating a build system
+-- Application: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr
+-- CMake version: 3.28.1
+-- Found Python3: /home/hayman/zephyrproject/.venv/bin/python3 (found suitable version "3.12.3", minimum required is "3.10") found components: Interpreter 
+-- Cache files will be written to: /home/hayman/.cache/zephyr
+-- Zephyr version: 4.1.99 (/home/hayman/zephyrproject/zephyr)
+-- Found west (found suitable version "1.3.0", minimum required is "0.14.0")
+-- Board: nucleo_f767zi, qualifiers: stm32f767xx
+-- ZEPHYR_TOOLCHAIN_VARIANT not set, trying to locate Zephyr SDK
+-- Found host-tools: zephyr 0.17.0 (/home/hayman/zephyr-sdk-0.17.0)
+-- Found toolchain: zephyr 0.17.0 (/home/hayman/zephyr-sdk-0.17.0)
+-- Found Dtc: /home/hayman/zephyr-sdk-0.17.0/sysroots/x86_64-pokysdk-linux/usr/bin/dtc (found suitable version "1.6.0", minimum required is "1.4.6") 
+-- Found BOARD.dts: /home/hayman/zephyrproject/zephyr/boards/st/nucleo_f767zi/nucleo_f767zi.dts
+-- Found devicetree overlay: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/boards/nucleo_f767zi_firmware.overlay
+-- Found devicetree overlay: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/boards/nucleo_f767zi_ws2812_pwm.overlay
+-- Generated zephyr.dts: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/build/zephyr/zephyr.dts
+-- Generated pickled edt: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/build/zephyr/edt.pickle
+-- Generated devicetree_generated.h: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/build/zephyr/include/generated/zephyr/devicetree_generated.h
+-- Including generated dts.cmake file: /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/build/zephyr/dts.cmake
+Parsing /home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/Kconfig
+Loaded configuration '/home/hayman/zephyrproject/zephyr/boards/st/nucleo_f767zi/nucleo_f767zi_defconfig'
+Merged configuration '/home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/prj.conf'
+Merged configuration '/home/hayman/zephyrproject/zephyr/app/remote_io_zephyr/boards/nucleo_f767zi.conf'
+-- Configuring incomplete, errors occurred!
