@@ -39,8 +39,15 @@ int ws28xx_led_init(void)
         pixels[i].g = 0;
         pixels[i].b = 0;
     }
+    // disable irq
+    // int key = irq_lock();
+
     // update the LED strip
     ret = led_strip_update_rgb(led_strip_dev, pixels, STRIP_NUM_PIXELS);
+
+    // enable irq
+    // irq_unlock(key);
+
     if (ret < 0) {
         LOG_ERR("Failed to turn off LED strip: %d", ret);
         return ret;

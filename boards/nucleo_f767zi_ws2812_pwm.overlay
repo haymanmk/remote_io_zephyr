@@ -1,5 +1,11 @@
 #include <zephyr/dt-bindings/led/led.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
+
+&dma1 {
+    compatible = "st,stm32-dma-v1";
+    status = "okay";
+};
 
 &timers3 {
     pwm_tim3: pwm {
@@ -16,10 +22,15 @@
         color-mapping = <LED_COLOR_ID_GREEN
                         LED_COLOR_ID_RED
                         LED_COLOR_ID_BLUE>;
-        pwms = <&pwm_tim3 1 120 (PWM_POLARITY_NORMAL)>;
-        delay-t1h = <48>;
-        delay-t1l = <32>;
-        delay-t0h = <16>;
-        delay-t0l = <32>;
+        dmas = <&dma1 4 5
+                (STM32_DMA_MEMORY_TO_PERIPH | STM32_DMA_MEM_INC | STM32_DMA_PERIPH_32BITS | STM32_DMA_MEM_32BITS | STM32_DMA_PRIORITY_VERY_HIGH)
+                STM32_DMA_FIFO_FULL>;
+        dma-names = "tim3-dma";
+        pwms = <&pwm_tim3 1 2500 (PWM_POLARITY_NORMAL)>;
+        reset-delay = <50>;
+        delay-t1h = <800>;
+        delay-t1l = <450>;
+        delay-t0h = <400>;
+        delay-t0l = <850>;
     };
 };

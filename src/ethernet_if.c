@@ -378,7 +378,7 @@ int tcp_server_init(void)
     while(1) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);
-        thread_analyzer_print(0);
+        // thread_analyzer_print(0);
         int client = zsock_accept(sock, (struct sockaddr *)&client_addr, &addr_len);
         if (client < 0) {
             LOG_ERR("Failed to accept connection: %d", -errno);
