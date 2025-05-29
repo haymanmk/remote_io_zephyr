@@ -26,7 +26,7 @@
                 (STM32_DMA_MEMORY_TO_PERIPH | STM32_DMA_MEM_INC | STM32_DMA_PERIPH_32BITS | STM32_DMA_MEM_32BITS | STM32_DMA_PRIORITY_VERY_HIGH)
                 STM32_DMA_FIFO_FULL>;
         dma-names = "tim3-dma";
-        pwms = <&pwm_tim3 1 2500 (PWM_POLARITY_NORMAL)>;
+        pwms = <&pwm_tim3 1 1250 (PWM_POLARITY_NORMAL)>;
         reset-delay = <50>;
         delay-t1h = <800>;
         delay-t1l = <450>;

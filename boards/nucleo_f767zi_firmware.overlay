@@ -108,6 +108,9 @@
         usr_out_15: user_output_15 {
             gpios = <&gpiod 13 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
         };
+        usr_dbg: user_dbg {
+            gpios = <&gpiob 8 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+        };
     };
 };
 
@@ -132,6 +135,7 @@
     pinctrl-0 = <&usart2_tx_pd5 &usart2_rx_pa3>;
     pinctrl-names = "default";
     current-speed = <115200>;
+    /* interrupts = <37 5>; */
     status = "okay";
 };
 
@@ -139,5 +143,11 @@
     pinctrl-0 = <&uart5_tx_pb6 &uart5_rx_pb12>;
     pinctrl-names = "default";
     current-speed = <9600>;
+    /* interrupts = <38 5>; */
     status = "okay";
 };
+
+/* Ethernet priority */
+/* &mac {
+    interrupts = < 0x3d 0x5 >;
+}; */

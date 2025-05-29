@@ -74,13 +74,13 @@ int ws28xx_led_set_color(uint8_t r, uint8_t g, uint8_t b, uint16_t led)
     pixels[led].b = b;
 
     // disable irq
-    int key = irq_lock();
+    // int key = irq_lock();
 
     // update the LED strip
     ret = led_strip_update_rgb(led_strip_dev, pixels, STRIP_NUM_PIXELS);
 
     // enable irq
-    irq_unlock(key);
+    // irq_unlock(key);
 
     if (ret < 0) {
         LOG_ERR("Failed to update LED strip [%d]: %d", led, ret);
