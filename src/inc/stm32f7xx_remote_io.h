@@ -24,11 +24,11 @@ enum Channel {
 #include "main.h"
 #include "error_code.h"
 #include "utils.h"
-#include "cpu_map.h"
 
 #define MAX_INT_DIGITS 10 // please take into consideration the maximum number of digits for int32_t
 #define DIGITAL_INPUT_MAX 16 // maximum number of digital inputs
 #define DIGITAL_OUTPUT_MAX 16 // maximum number of digital outputs
+#define PWM_WS28XX_LED_MAX 1
 
 /* Exported functions */
 
