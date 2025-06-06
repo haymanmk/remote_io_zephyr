@@ -7,6 +7,6 @@ manifest:
       import: true
     - name: ws2812-pwm
       url: https://github.com/haymanmk/ws2812-pwm.git
-      revision: main
+      revision: 5186892508e424ddec8d3359c0e99aadf89a0a91
       path: modules/ws2812-pwm
       import: true

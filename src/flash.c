@@ -7,12 +7,14 @@ LOG_MODULE_REGISTER(flash_storage, LOG_LEVEL_DBG);
 #include "stm32f7xx_remote_io.h"
 #include "flash.h"
 
+#define NUM_FLASH_AREAS 1 // Number of flash areas to bring up
+
 /**
  * @brief The label for the flash area can be found in the device tree.
  */
 // storage partition id
 #define STORAGE_PARTITION_0_ID FIXED_PARTITION_ID(storage_partition_0)
-#define STORAGE_PARTITION_1_ID FIXED_PARTITION_ID(storage_partition_1)
+// #define STORAGE_PARTITION_1_ID FIXED_PARTITION_ID(storage_partition_1)
 
 /* Private function prototypes */
 io_status_t flash_erase_sector(const struct flash_area *sector);
@@ -23,7 +25,7 @@ K_EVENT_DEFINE(flashAreaReadyEvent);
 
 // flash device reference - storage partition
 const struct flash_area *storage_0 = NULL;
-const struct flash_area *storage_1 = NULL;
+// const struct flash_area *storage_1 = NULL;
 
 // used by listify
 #define __BRING_UP_FLASH_AREA(id, _) \
@@ -60,7 +62,7 @@ io_status_t flash_init(void)
     //     flash_area_close(storage_partition);
     //     return STATUS_ERROR; // flash area device is not ready
     // }
-    BRING_UP_FLASH_AREA(2);
+    BRING_UP_FLASH_AREA(NUM_FLASH_AREAS);
 
     // signal that the flash area is ready
     k_event_post(&flashAreaReadyEvent, FLASH_AREA_READY_EVENT);

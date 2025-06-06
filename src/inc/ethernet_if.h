@@ -22,6 +22,10 @@
 #define TCP_SERV_DEFINE_N(SERV_HANDLER, N) \
         LISTIFY(N, _TCP_SERV_DEFINE, (;), SERV_HANDLER)
 
+// define ethernet interface events
+#define ETHERNET_IF_EVENT_IPV4_CONNECTED    (1 << 0)
+#define ETHERNET_IF_EVENT_READY             (1 << 1)
+
 // define a struct to hold socket service information
 typedef struct ethernet_if_socket_service {
         api_service_context_t service_context;
@@ -37,6 +41,7 @@ typedef struct ethernet_if_socket_service {
 
 
 /* Function prototypes */
+int ethernet_if_configure(void);
 int tcp_server_init();
 int ethernet_if_send(ethernet_if_socket_service_t *service, const char *format_string, ...);
 

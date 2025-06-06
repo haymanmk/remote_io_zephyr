@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(ethernet_if, LOG_LEVEL_INF);
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/net_ip.h>
+#include <zephyr/net/net_mgmt.h>
 #include <zephyr/posix/poll.h>
 #include <zephyr/posix/sys/socket.h>
 #include <zephyr/posix/arpa/inet.h>
@@ -46,6 +47,8 @@ static int unregister_all_clients_at_socket_service(void);
 void ethernet_if_respond_handler(ethernet_if_socket_service_t *service, const char *format, ...);
 void ethernet_if_respond_raw_bytes_handler(ethernet_if_socket_service_t *service, const uint8_t *buf, size_t len);
 
+// declare events
+K_EVENT_DEFINE(ethernet_if_events); // used to notify clients
 
 // define the locking mechanism
 static K_MUTEX_DEFINE(lock);
@@ -81,8 +84,24 @@ static const struct gpio_dt_spec blue_led =
 static const struct gpio_dt_spec red_led =
     GPIO_DT_SPEC_GET(DT_NODELABEL(red_led), gpios);
 
+static struct net_mgmt_event_callback mgmt_cb;
+struct sockaddr_in addr_ipv4;
+struct in_addr gateway, netmask;
+
 /* Functions */
 
+static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
+                                   uint32_t mgmt_event,
+                                   struct net_if *iface) {
+    switch (mgmt_event) {
+        case NET_EVENT_L4_CONNECTED:
+            LOG_INF("Network connectivity established");
+            k_event_post(&ethernet_if_events, ETHERNET_IF_EVENT_IPV4_CONNECTED);
+            break;
+        default:
+            break;
+    }
+}
 
 static void tcp_service_handler(struct net_socket_service_event *pev)
 {
@@ -165,16 +184,14 @@ static void receive_data(struct net_socket_service_event *pev,
 }
 
 /**
- * @brief Register a client at a socket service
+ * @brief Create a socket service thread
+ * @return 0 on success, negative error code on failure
  */
-int tcp_server_init(void)
+int ethernet_if_configure(void)
 {
-    // wait for settings loaded event
-    k_event_wait(&settingsLoadedEvent, SETTINGS_LOADED_EVENT, false, K_FOREVER);
-
-    int ret = 0;
-    static int counter = 0;
-    struct sockaddr_in addr_ipv4 = {
+    LOG_DBG("Configuring Ethernet interface...");
+    // TODO: Implement Ethernet interface configuration
+    addr_ipv4 = (struct sockaddr_in){
         .sin_family = AF_INET,
         .sin_port = htons((DEFAULT_PORT + settings.tcp_port)),
         .sin_addr = {.s4_addr = {
@@ -184,7 +201,7 @@ int tcp_server_init(void)
             settings.ip_address_3
         }},
     };
-    struct in_addr gateway = {
+    gateway = (struct in_addr){
         .s4_addr = {
             settings.gateway_0,
             settings.gateway_1,
@@ -192,7 +209,7 @@ int tcp_server_init(void)
             settings.gateway_3
         }
     };
-    struct in_addr netmask = {
+    netmask = (struct in_addr){
         .s4_addr = {
             settings.netmask_0,
             settings.netmask_1,
@@ -270,6 +287,57 @@ int tcp_server_init(void)
         }
     }
 
+    // get default network interface
+    struct net_if *iface = net_if_get_default();
+    struct net_if_addr *ifaddr;
+
+    if (iface == NULL) {
+        LOG_ERR("No default network interface found");
+        return -1;
+    }
+
+    // set the interface address
+    ifaddr = net_if_ipv4_addr_add(iface, &addr_ipv4.sin_addr, NET_ADDR_MANUAL, 0);
+    // set netmask
+    net_if_ipv4_set_netmask_by_addr(iface, &addr_ipv4.sin_addr, &netmask);
+    // set gateway
+    net_if_ipv4_set_gw(iface, &gateway);
+    // set MAC address
+    net_if_set_link_addr(iface, mac_addr, sizeof(mac_addr), NET_LINK_ETHERNET);
+
+    net_mgmt_init_event_callback(&mgmt_cb,
+                                 net_mgmt_event_handler,
+                                 NET_EVENT_L4_CONNECTED);
+    net_mgmt_add_event_callback(&mgmt_cb);
+
+    LOG_INF("Waiting for network...");
+
+    // k_event_wait(&ethernet_if_events, ETHERNET_IF_EVENT_IPV4_CONNECTED, false, K_FOREVER);
+
+    // notify that the Ethernet interface is ready
+    k_event_post(&ethernet_if_events, ETHERNET_IF_EVENT_READY);
+
+    return 0;
+}
+
+/**
+ * @brief Register a client at a socket service
+ */
+int tcp_server_init(void)
+{
+    // wait for settings loaded event
+    k_event_wait(&settingsLoadedEvent, SETTINGS_LOADED_EVENT, false, K_FOREVER);
+
+    int ret = 0;
+    static int counter = 0;
+
+    // configure the Ethernet interface
+    ret = ethernet_if_configure();
+    if (ret < 0) {
+        LOG_ERR("Failed to configure Ethernet interface: %d", ret);
+        return ret;
+    }
+    
     // initialize the socket service table
     for (int i = 0; i < POLLABLE_SOCKETS; i++) {
         ethernet_if_socket_service_t *service = malloc(sizeof(ethernet_if_socket_service_t));
@@ -299,21 +367,6 @@ int tcp_server_init(void)
 
     // get default network interface
     struct net_if *iface = net_if_get_default();
-    struct net_if_addr *ifaddr;
-
-    if (iface == NULL) {
-        LOG_ERR("No default network interface found");
-        return -1;
-    }
-
-    // set the interface address
-    ifaddr = net_if_ipv4_addr_add(iface, &addr_ipv4.sin_addr, NET_ADDR_MANUAL, 0);
-    // set netmask
-    net_if_ipv4_set_netmask_by_addr(iface, &addr_ipv4.sin_addr, &netmask);
-    // set gateway
-    net_if_ipv4_set_gw(iface, &gateway);
-    // set MAC address
-    net_if_set_link_addr(iface, mac_addr, sizeof(mac_addr), NET_LINK_ETHERNET);
     
     // Create a TCP socket
     int sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
