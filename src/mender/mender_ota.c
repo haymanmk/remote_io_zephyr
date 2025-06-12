@@ -6,8 +6,8 @@ LOG_MODULE_REGISTER(mender_ota, LOG_LEVEL_DBG);
 
 #include <mender/utils.h>
 #include <mender/client.h>
+#include <mender/zephyr-image-update-module.h>
 
-#include "mender_ota.h"
 #include "ethernet_if.h"
 #include "storage.h"
 
@@ -30,7 +30,7 @@ static mender_identity_t mender_identity = { .name = "mac", .value = mac_address
 /*************/
 
 // TLS
-#if defined(CONFIG_NET_SOCKETS_SOCKETS_TLS)
+#if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS)
 #include <zephyr/net/tls_credentials.h>
 
 #ifdef CONFIG_MENDER_NET_CA_CERTIFICATE_TAG_PRIMARY
@@ -94,7 +94,7 @@ int mender_ota_init(void) {
 
     mender_err_t ret = MENDER_OK;
 
-#if defined(CONFIG_NET_SOCKETS_SOCKETS_TLS)
+#if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS)
     // add TLS credentials
 #ifdef CONFIG_MENDER_NET_CA_CERTIFICATE_TAG_PRIMARY
     if (0 != tls_credential_add(CONFIG_MENDER_NET_CA_CERTIFICATE_TAG_PRIMARY,
@@ -160,6 +160,13 @@ void mender_ota_task(void *p1, void *p2, void *p3) {
         LOG_ERR("Failed to initialize Mender OTA");
         return;
     }
+
+#ifdef CONFIG_MENDER_ZEPHYR_IMAGE_UPDATE_MODULE
+    if (MENDER_OK != (mender_zephyr_image_register_update_module())) {
+        /* error already logged */
+        return;
+    }
+#endif /* CONFIG_MENDER_ZEPHYR_IMAGE_UPDATE_MODULE */
 
     // activate the mender client
     if (MENDER_OK != mender_client_activate()) {

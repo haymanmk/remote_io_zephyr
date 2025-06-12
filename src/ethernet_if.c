@@ -84,24 +84,10 @@ static const struct gpio_dt_spec blue_led =
 static const struct gpio_dt_spec red_led =
     GPIO_DT_SPEC_GET(DT_NODELABEL(red_led), gpios);
 
-static struct net_mgmt_event_callback mgmt_cb;
 struct sockaddr_in addr_ipv4;
 struct in_addr gateway, netmask;
 
 /* Functions */
-
-static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-                                   uint32_t mgmt_event,
-                                   struct net_if *iface) {
-    switch (mgmt_event) {
-        case NET_EVENT_L4_CONNECTED:
-            LOG_INF("Network connectivity established");
-            k_event_post(&ethernet_if_events, ETHERNET_IF_EVENT_IPV4_CONNECTED);
-            break;
-        default:
-            break;
-    }
-}
 
 static void tcp_service_handler(struct net_socket_service_event *pev)
 {
@@ -304,15 +290,6 @@ int ethernet_if_configure(void)
     net_if_ipv4_set_gw(iface, &gateway);
     // set MAC address
     net_if_set_link_addr(iface, mac_addr, sizeof(mac_addr), NET_LINK_ETHERNET);
-
-    net_mgmt_init_event_callback(&mgmt_cb,
-                                 net_mgmt_event_handler,
-                                 NET_EVENT_L4_CONNECTED);
-    net_mgmt_add_event_callback(&mgmt_cb);
-
-    LOG_INF("Waiting for network...");
-
-    // k_event_wait(&ethernet_if_events, ETHERNET_IF_EVENT_IPV4_CONNECTED, false, K_FOREVER);
 
     // notify that the Ethernet interface is ready
     k_event_post(&ethernet_if_events, ETHERNET_IF_EVENT_READY);

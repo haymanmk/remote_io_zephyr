@@ -1,0 +1,5 @@
+config USER_MENDER_ARTIFACT_NAME
+    string "user-defined mender artifact name"
+    help
+        Define a Mender artifact name for creating software version
+        whose format is [USER_MENDER_ARTIFACT_NAME]_[APP_VERSION_STRING].

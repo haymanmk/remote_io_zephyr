@@ -37,4 +37,12 @@ mainmenu "Remote I/O Config"
             Use my WS28XX library for controlling the WS28XX LED strip.
             If not selected, the default WS28XX library will be used.
 
+    config REMOTEIO_MENDER_ARTIFACT_NAME
+        string "define mender artifact name"
+        default "remote-io"
+        help
+            Define the Mender Artifact name for Mender client to query for
+            if there are any update regarding the specified artifact name.
+        
 source "Kconfig.zephyr"
+rsource "src/mender/Kconfig"

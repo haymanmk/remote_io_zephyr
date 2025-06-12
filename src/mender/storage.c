@@ -19,6 +19,7 @@
  */
 
 #include <string.h>
+#include <app_version.h>
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
@@ -186,55 +187,55 @@ mender_storage_set_artifact_name(const char *artifact_name) {
     return MENDER_OK;
 }
 
-mender_err_t
-mender_storage_get_artifact_name(const char **artifact_name) {
-    assert(NULL != artifact_name);
-    assert(NULL == *artifact_name); // prevent memory leak
+mender_err_t mender_storage_get_artifact_name(const char **artifact_name)
+{
+	assert(NULL != artifact_name);
+	assert(NULL == *artifact_name); // prevent memory leak
 
-    // return cached artifact name if it exists
-    if (NULL != cached_artifact_name) {
-        // return cached artifact name if it exists
-        *artifact_name = cached_artifact_name;
-        return MENDER_OK;
-    }
+	// return cached artifact name if it exists
+	if (NULL != cached_artifact_name) {
+		// return cached artifact name if it exists
+		*artifact_name = cached_artifact_name;
+		return MENDER_OK;
+	}
 
-    // read artifact name and its length from flash
-    // it might be empty if no artifact name has been set
-    size_t artifact_name_length = 0;
-    mender_err_t ret = MENDER_OK;
-    ret = __mender_storage_read_data_from_flash(storage_partition, MENDER_ARTIFACT_NAME_OFFSET, LENGTH_SIZE, (void **)artifact_name, &artifact_name_length);
-    if (MENDER_OK != ret) { // not found or error
-        if (MENDER_NOT_FOUND == ret) { // get artifact name from the build, if it exists
-            const char *artifact_name_literal;
-#ifdef CONFIG_MENDER_ARTIFACT_NAME
-            if (strlen(CONFIG_MENDER_ARTIFACT_NAME) > 0) {
-                artifact_name_literal = CONFIG_MENDER_ARTIFACT_NAME;
-            }
-            else {
-                artifact_name_literal = "unknown"; // no artifact name defined in the build
-            }
-#else /* CONFIG_MENDER_ARTIFACT_NAME */
-            artifact_name_literal = "unknown"; // no artifact name defined in the build
-#endif /* CONFIG_MENDER_ARTIFACT_NAME */
+	// read artifact name and its length from flash
+	// it might be empty if no artifact name has been set
+	size_t artifact_name_length = 0;
+	mender_err_t ret = MENDER_OK;
+	ret = __mender_storage_read_data_from_flash(storage_partition, MENDER_ARTIFACT_NAME_OFFSET,
+						    LENGTH_SIZE, (void **)artifact_name,
+						    &artifact_name_length);
+	if (MENDER_OK !=
+	    ret) { // not found or error. get artifact name from the build, if it exists
+		const char *artifact_name_literal;
+#ifdef CONFIG_USER_MENDER_ARTIFACT_NAME
+        char __artifact_name_buf[64] = {0};
+		if (strlen(CONFIG_USER_MENDER_ARTIFACT_NAME) > 0) {
+            snprintf(__artifact_name_buf, sizeof(__artifact_name_buf), "%s_%s", CONFIG_USER_MENDER_ARTIFACT_NAME, APP_VERSION_STRING);
+			artifact_name_literal = __artifact_name_buf; // use the artifact name defined in the build
+		} else {
+			artifact_name_literal = "unknown"; // no artifact name defined in the build
+		}
+#else  /* CONFIG_USER_MENDER_ARTIFACT_NAME */
+		artifact_name_literal = "unknown"; // no artifact name defined in the build
+#endif /* CONFIG_USER_MENDER_ARTIFACT_NAME */
 
-            // copy artifact name literal to artifact_name
-            if (NULL == (*artifact_name = strdup(artifact_name_literal))) {
-                mender_log_error("Unable to allocate memory for artifact name");
-                return MENDER_FAIL;
-            }
-            // cache artifact name for future use
-            cached_artifact_name = (char *)*artifact_name; // cache the artifact name
-        }
-        else {
-            mender_log_error("Unable to read artifact name");
-        }
-    }
-    else { // artifact name was read successfully
-        // update cached artifact name
-        cached_artifact_name = (char *)*artifact_name;
-    }
+		// copy artifact name literal to artifact_name
+		if (NULL == (*artifact_name = strdup(artifact_name_literal))) {
+			mender_log_error("Unable to allocate memory for artifact name");
+			return MENDER_FAIL;
+		}
+		// cache artifact name for future use
+		cached_artifact_name = (char *)*artifact_name; // cache the artifact name
+        ret = MENDER_OK; // set return value to OK since we set the artifact name from the build
+        mender_log_info("Artifact name not found in storage, using build artifact name: %s", *artifact_name);
+	} else { // artifact name was read successfully
+		// update cached artifact name
+		cached_artifact_name = (char *)*artifact_name;
+	}
 
-    return ret;
+	return ret;
 }
 
 mender_err_t
@@ -292,13 +293,15 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
         return MENDER_FAIL;
     }
     // check if data is empty
-    if (mender_storage_is_empty((unsigned char *)&data_length, len_size)) {
+    if (mender_storage_is_empty((unsigned char *)data_length, len_size) ||
+        *data_length == 0) {
         mender_log_info("Data not available");
         return MENDER_NOT_FOUND;
     }
     // check if data length is valid. if data length is larger than the flash area size, return error
     if (*data_length > fa->fa_size - offset - len_size) {
-        mender_log_error("Data length is larger than flash area size");
+        mender_log_error("Data length is larger than flash area size: %zu > %lu",
+                         *data_length, fa->fa_size - offset - len_size);
         return MENDER_FAIL;
     }
     // allocate memory for data

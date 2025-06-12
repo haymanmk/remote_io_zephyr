@@ -1,0 +1,6 @@
+set -x
+
+systemctl restart isc-dhcp-server
+
+iptables -A FORWARD -j ACCEPT
+iptables -t nat -o wlp99s0 -A POSTROUTING -j MASQUERADE
