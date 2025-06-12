@@ -40,7 +40,7 @@ done < "$VERSION_FILE"
 
 # artifact type: zephyr-image
 UPDATE_MODULE="zephyr-image"
-ARTIFACT_NAME="mender-artifact_${VERSION_MAJOR}.${VERSION_MINOR}.${PATCHLEVEL}-${VERSION_TWEAK}${EXTRAVERSION}"
+ARTIFACT_NAME="mender-artifact_${VERSION_MAJOR}.${VERSION_MINOR}.${PATCHLEVEL}+${VERSION_TWEAK}${EXTRAVERSION}"
 DEVICE_TYPE="nucleo_f767zi"
 
 mender-artifact write module-image \

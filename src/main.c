@@ -1,3 +1,7 @@
+#include <app_version.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
+
 #include "ethernet_if.h"
 #include "digital_input.h"
 #include "digital_output.h"
@@ -11,6 +15,9 @@
 #endif
 
 int main(void) {
+    // print current version
+    LOG_INF("RemoteIO STM32F7xx - Version: %s", APP_VERSION_EXTENDED_STRING);
+
     // initialize flash memory
     flash_init();
 

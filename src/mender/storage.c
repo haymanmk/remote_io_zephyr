@@ -212,7 +212,7 @@ mender_err_t mender_storage_get_artifact_name(const char **artifact_name)
 #ifdef CONFIG_USER_MENDER_ARTIFACT_NAME
         char __artifact_name_buf[64] = {0};
 		if (strlen(CONFIG_USER_MENDER_ARTIFACT_NAME) > 0) {
-            snprintf(__artifact_name_buf, sizeof(__artifact_name_buf), "%s_%s", CONFIG_USER_MENDER_ARTIFACT_NAME, APP_VERSION_STRING);
+            snprintf(__artifact_name_buf, sizeof(__artifact_name_buf), "%s_%s", CONFIG_USER_MENDER_ARTIFACT_NAME, APP_VERSION_EXTENDED_STRING);
 			artifact_name_literal = __artifact_name_buf; // use the artifact name defined in the build
 		} else {
 			artifact_name_literal = "unknown"; // no artifact name defined in the build
