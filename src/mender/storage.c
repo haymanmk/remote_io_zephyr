@@ -33,7 +33,6 @@
 #include "storage.h"
 
 #define LENGTH_SIZE 4
-#define MENDER_STORAGE_DEPLOYMENT_DATA_LENGTH (192)
 
 #define STORAGE_PARTITION_ID FIXED_PARTITION_ID(storage_partition_1)
 #define STORAGE_PARTITION_OFFSET 0
@@ -47,9 +46,9 @@
 static bool mender_storage_is_empty(unsigned char *data, size_t length);
 static mender_err_t __mender_storage_write_data_to_flash(const struct flash_area *fa, off_t offset, size_t len_size, const void *data, size_t data_length);
 static mender_err_t __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset, size_t len_size, void **data, size_t *data_length);
+static mender_err_t __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset, size_t len_size, const void *data, size_t data_length);
 
 const struct flash_area *storage_partition;
-static char mender_storage_deployment_data[MENDER_STORAGE_DEPLOYMENT_DATA_LENGTH];
 static char *cached_artifact_name = NULL;
 
 mender_err_t
@@ -72,13 +71,13 @@ mender_storage_set_authentication_keys(unsigned char *private_key, size_t privat
     mender_err_t ret;
 
     // write private key
-    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(storage_partition, MENDER_PRIVATE_KEY_OFFSET, LENGTH_SIZE, (void *)private_key, private_key_length))) {
+    if (MENDER_OK != (ret = __mender_storage_update_data_to_flash(storage_partition, MENDER_PRIVATE_KEY_OFFSET, LENGTH_SIZE, (void *)private_key, private_key_length))) {
         mender_log_error("Unable to write private key");
         return ret;
     }
 
     // write public key
-    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(storage_partition, MENDER_PUBLIC_KEY_OFFSET, LENGTH_SIZE, (void *)public_key, public_key_length))) {
+    if (MENDER_OK != (ret = __mender_storage_update_data_to_flash(storage_partition, MENDER_PUBLIC_KEY_OFFSET, LENGTH_SIZE, (void *)public_key, public_key_length))) {
         mender_log_error("Unable to write public key");
         return ret;
     }
@@ -124,16 +123,11 @@ mender_err_t
 mender_storage_set_deployment_data(char *deployment_data) {
     assert(NULL != deployment_data);
 
-    /* Retrieve length of the deployment data */
-    size_t deployment_data_length = strlen(deployment_data);
-    if (deployment_data_length >= MENDER_STORAGE_DEPLOYMENT_DATA_LENGTH) {
-        mender_log_error("Unable to set deployment data");
-        return MENDER_FAIL;
+    mender_err_t ret;
+    if (MENDER_OK != (ret = __mender_storage_update_data_to_flash(storage_partition, MENDER_DEPLOYMENT_DATA_OFFSET, LENGTH_SIZE, (void *)deployment_data, strlen(deployment_data)))) {
+        mender_log_error("Unable to write deployment data");
+        return ret;
     }
-
-    /* Copy deployment data */
-    memcpy(mender_storage_deployment_data, deployment_data, deployment_data_length);
-    memset(&mender_storage_deployment_data[deployment_data_length], '\0', MENDER_STORAGE_DEPLOYMENT_DATA_LENGTH - deployment_data_length);
 
     return MENDER_OK;
 }
@@ -142,19 +136,15 @@ mender_err_t
 mender_storage_get_deployment_data(char **deployment_data) {
     assert(NULL != deployment_data);
 
-    /* Retrieve length of the deployment data */
-    if (0 == strlen(mender_storage_deployment_data)) {
-        mender_log_info("Deployment data not available");
-        return MENDER_NOT_FOUND;
-    }
-
-    /* Read deployment data */
-    if (NULL == (*deployment_data = strdup(mender_storage_deployment_data))) {
+    // read deployment data and its length from flash
+    size_t deployment_data_length = 0;
+    mender_err_t ret = __mender_storage_read_data_from_flash(storage_partition, MENDER_DEPLOYMENT_DATA_OFFSET, LENGTH_SIZE, (void **)deployment_data, &deployment_data_length);
+    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
         mender_log_error("Unable to read deployment data");
-        return MENDER_FAIL;
+        return ret;
     }
 
-    return MENDER_OK;
+    return ret;
 }
 
 mender_err_t
@@ -173,7 +163,7 @@ mender_storage_set_artifact_name(const char *artifact_name) {
     assert(NULL != artifact_name);
 
     // write artifact name to flash
-    if (MENDER_OK != __mender_storage_write_data_to_flash(storage_partition, MENDER_ARTIFACT_NAME_OFFSET, LENGTH_SIZE, (void *)artifact_name, strlen(artifact_name))) {
+    if (MENDER_OK != __mender_storage_update_data_to_flash(storage_partition, MENDER_ARTIFACT_NAME_OFFSET, LENGTH_SIZE, (void *)artifact_name, strlen(artifact_name))) {
         mender_log_error("Unable to write artifact name");
         return MENDER_FAIL;
     }
@@ -256,7 +246,7 @@ mender_storage_is_empty(unsigned char *data, size_t length) {
     return true;
 }
 
-static mender_err_t
+static inline mender_err_t
 __mender_storage_write_data_to_flash(const struct flash_area *fa, off_t offset, size_t len_size, const void *data, size_t data_length) {
     // write the length of the data
     if (flash_area_write(fa, offset, &data_length, len_size)) {
@@ -325,4 +315,122 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
     }
 
     return MENDER_OK;
+}
+
+static mender_err_t
+__mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset, size_t len_size, const void *data, size_t data_length) {
+    mender_err_t ret = MENDER_OK;
+
+    // read all data from flash before erasing all flash area
+    // get private key
+    unsigned char *private_key = NULL;
+    size_t private_key_length = 0;
+    ret =__mender_storage_read_data_from_flash(fa, MENDER_PRIVATE_KEY_OFFSET, len_size, (void **)&private_key, &private_key_length);
+    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+        mender_log_error("Unable to get private key");
+        return ret;
+    }
+
+    // get public key
+    unsigned char *public_key = NULL;
+    size_t public_key_length = 0;
+    ret = __mender_storage_read_data_from_flash(fa, MENDER_PUBLIC_KEY_OFFSET, len_size, (void **)&public_key, &public_key_length);
+    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+        mender_log_error("Unable to get public key");
+        goto exit;
+    }
+
+    // get deployment data
+    char *deployment_data = NULL;
+    size_t deployment_data_length = 0;
+    ret = __mender_storage_read_data_from_flash(fa, MENDER_DEPLOYMENT_DATA_OFFSET, len_size, (void **)&deployment_data, &deployment_data_length);
+    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+        mender_log_error("Unable to get deployment data");
+        goto exit;
+    }
+
+    // get artifact name
+    char *artifact_name = NULL;
+    size_t artifact_name_length = 0;
+    ret = __mender_storage_read_data_from_flash(fa, MENDER_ARTIFACT_NAME_OFFSET, len_size, (void **)&artifact_name, &artifact_name_length);
+    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+        mender_log_error("Unable to get artifact name");
+        goto exit;
+    }
+
+    // erase the entire flash area before writing new data
+    if (flash_area_erase(fa, 0, fa->fa_size)) {
+        mender_log_error("Unable to erase flash area");
+        ret = MENDER_FAIL;
+        goto exit;
+    }
+
+    // identify which data set to update according to the offset
+    if (offset == MENDER_PRIVATE_KEY_OFFSET) {
+        // free private key and assign new data
+        if (private_key) free(private_key);
+        private_key = malloc(data_length);
+        if (NULL == private_key) {
+            mender_log_error("Unable to allocate memory for private key");
+            ret = MENDER_FAIL;
+            goto exit;
+        }
+        memcpy(private_key, data, data_length);
+        private_key_length = data_length;
+    } else if (offset == MENDER_PUBLIC_KEY_OFFSET) {
+        // free public key and assign new data
+        if (public_key) free(public_key);
+        public_key = malloc(data_length);
+        if (NULL == public_key) {
+            mender_log_error("Unable to allocate memory for public key");
+            ret = MENDER_FAIL;
+            goto exit;
+        }
+        memcpy(public_key, data, data_length);
+        public_key_length = data_length;
+    } else if (offset == MENDER_DEPLOYMENT_DATA_OFFSET) {
+        // free deployment data and assign new data
+        if (deployment_data) free(deployment_data);
+        deployment_data = strdup((const char *)data);
+        deployment_data_length = data_length;
+    } else if (offset == MENDER_ARTIFACT_NAME_OFFSET) {
+        // free artifact name and assign new data
+        if (artifact_name) free(artifact_name);
+        artifact_name = strdup((const char *)data);
+        artifact_name_length = data_length;
+    } else {
+        mender_log_error("Unknown offset: %ld", offset);
+        ret = MENDER_FAIL;
+        goto exit;
+    }
+
+    // write data back to flash
+    // write private key
+    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(fa, MENDER_PRIVATE_KEY_OFFSET, len_size, private_key, private_key_length))) {
+        mender_log_error("Unable to write private key");
+        goto exit;
+    }
+    // write public key
+    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(fa, MENDER_PUBLIC_KEY_OFFSET, len_size, public_key, public_key_length))) {
+        mender_log_error("Unable to write public key");
+        goto exit;
+    }
+    // write deployment data
+    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(fa, MENDER_DEPLOYMENT_DATA_OFFSET, len_size, deployment_data, deployment_data_length))) {
+        mender_log_error("Unable to write deployment data");
+        goto exit;
+    }
+    // write artifact name
+    if (MENDER_OK != (ret = __mender_storage_write_data_to_flash(fa, MENDER_ARTIFACT_NAME_OFFSET, len_size, artifact_name, artifact_name_length))) {
+        mender_log_error("Unable to write artifact name");
+        goto exit;
+    }
+
+exit:
+    if (private_key) free(private_key);
+    if (public_key) free(public_key);
+    if (deployment_data) free(deployment_data);
+    if (artifact_name) free(artifact_name);
+
+    return ret;
 }
