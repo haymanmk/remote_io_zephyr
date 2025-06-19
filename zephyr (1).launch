@@ -94,6 +94,6 @@
     <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
         <listEntry value="4"/>
     </listAttribute>
-    <stringAttribute key="org.eclipse.dsf.launch.MEMORY_BLOCKS" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&lt;memoryBlockExpressionList context=&quot;reserved-for-future-use&quot;&gt;&lt;gdbmemoryBlockExpression address=&quot;134318080&quot; label=&quot;0x8018800&quot;/&gt;&lt;gdbmemoryBlockExpression address=&quot;134323200&quot; label=&quot;0x8019c00&quot;/&gt;&lt;/memoryBlockExpressionList&gt;"/>
+    <stringAttribute key="org.eclipse.dsf.launch.MEMORY_BLOCKS" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&lt;memoryBlockExpressionList context=&quot;reserved-for-future-use&quot;&gt;&lt;gdbmemoryBlockExpression address=&quot;537271200&quot; label=&quot;0x20061ba0&quot;/&gt;&lt;gdbmemoryBlockExpression address=&quot;537271184&quot; label=&quot;0x20061b90&quot;/&gt;&lt;gdbmemoryBlockExpression address=&quot;537272120&quot; label=&quot;0x20061f38&quot;/&gt;&lt;gdbmemoryBlockExpression address=&quot;537272384&quot; label=&quot;0x20062040&quot;/&gt;&lt;/memoryBlockExpressionList&gt;"/>
     <stringAttribute key="process_factory_id" value="com.st.stm32cube.ide.mcu.debug.launch.HardwareDebugProcessFactory"/>
 </launchConfiguration>

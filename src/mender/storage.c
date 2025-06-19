@@ -51,6 +51,28 @@ static mender_err_t __mender_storage_update_data_to_flash(const struct flash_are
 const struct flash_area *storage_partition;
 static char *cached_artifact_name = NULL;
 
+#ifdef CONFIG_MENDER_SEPARATE_HEAP
+extern struct k_heap mender_heap;
+#endif // CONFIG_MENDER_SEPARATE_HEAP
+
+static void *
+mender_storage_malloc(size_t size) {
+#ifdef CONFIG_MENDER_SEPARATE_HEAP
+    return k_heap_alloc(&mender_heap, size, K_NO_WAIT);
+#else
+    return k_malloc(size);
+#endif
+}
+
+static void
+mender_storage_free(void *ptr) {
+#ifdef CONFIG_MENDER_SEPARATE_HEAP
+    k_heap_free(&mender_heap, ptr);
+#else
+    k_free(ptr);
+#endif
+}
+
 mender_err_t
 mender_storage_init(void) {
 
@@ -170,7 +192,7 @@ mender_storage_set_artifact_name(const char *artifact_name) {
     // free cached artifact name if it exists
     // because it has been stored in flash, we can safely free it to save memory
     if (cached_artifact_name) {
-        free(cached_artifact_name);
+        mender_storage_free(cached_artifact_name);
         cached_artifact_name = NULL;
     }
 
@@ -286,6 +308,7 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
     if (mender_storage_is_empty((unsigned char *)data_length, len_size) ||
         *data_length == 0) {
         mender_log_info("Data not available");
+        *data_length = 0; // set data length to 0
         return MENDER_NOT_FOUND;
     }
     // check if data length is valid. if data length is larger than the flash area size, return error
@@ -295,7 +318,7 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
         return MENDER_FAIL;
     }
     // allocate memory for data
-    if (NULL == (*data = malloc(*data_length))) {
+    if (NULL == (*data = mender_storage_malloc(*data_length))) {
         mender_log_error("Unable to allocate memory");
         return MENDER_FAIL;
     }
@@ -309,7 +332,7 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
     // check if data is empty
     if (mender_storage_is_empty(*data, *data_length)) {
         mender_log_info("Data not available");
-        free(*data);
+        mender_storage_free(*data);
         *data = NULL;
         return MENDER_NOT_FOUND;
     }
@@ -326,7 +349,10 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     unsigned char *private_key = NULL;
     size_t private_key_length = 0;
     ret =__mender_storage_read_data_from_flash(fa, MENDER_PRIVATE_KEY_OFFSET, len_size, (void **)&private_key, &private_key_length);
-    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+    if (MENDER_NOT_FOUND == ret) {
+        mender_log_info("Private key not found");
+    }
+    else if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
         mender_log_error("Unable to get private key");
         return ret;
     }
@@ -335,7 +361,10 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     unsigned char *public_key = NULL;
     size_t public_key_length = 0;
     ret = __mender_storage_read_data_from_flash(fa, MENDER_PUBLIC_KEY_OFFSET, len_size, (void **)&public_key, &public_key_length);
-    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+    if (MENDER_NOT_FOUND == ret) {
+        mender_log_info("Public key not found");
+    }
+    else if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
         mender_log_error("Unable to get public key");
         goto exit;
     }
@@ -344,7 +373,10 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     char *deployment_data = NULL;
     size_t deployment_data_length = 0;
     ret = __mender_storage_read_data_from_flash(fa, MENDER_DEPLOYMENT_DATA_OFFSET, len_size, (void **)&deployment_data, &deployment_data_length);
-    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+    if (MENDER_NOT_FOUND == ret) {
+        mender_log_info("Deployment data not found");
+    }
+    else if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
         mender_log_error("Unable to get deployment data");
         goto exit;
     }
@@ -353,7 +385,10 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     char *artifact_name = NULL;
     size_t artifact_name_length = 0;
     ret = __mender_storage_read_data_from_flash(fa, MENDER_ARTIFACT_NAME_OFFSET, len_size, (void **)&artifact_name, &artifact_name_length);
-    if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
+    if (MENDER_NOT_FOUND == ret) {
+        mender_log_info("Artifact name not found");
+    }
+    else if (MENDER_OK != ret && MENDER_NOT_FOUND != ret) {
         mender_log_error("Unable to get artifact name");
         goto exit;
     }
@@ -368,8 +403,8 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     // identify which data set to update according to the offset
     if (offset == MENDER_PRIVATE_KEY_OFFSET) {
         // free private key and assign new data
-        if (private_key) free(private_key);
-        private_key = malloc(data_length);
+        if (private_key) mender_storage_free(private_key);
+        private_key = mender_storage_malloc(data_length);
         if (NULL == private_key) {
             mender_log_error("Unable to allocate memory for private key");
             ret = MENDER_FAIL;
@@ -379,8 +414,8 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
         private_key_length = data_length;
     } else if (offset == MENDER_PUBLIC_KEY_OFFSET) {
         // free public key and assign new data
-        if (public_key) free(public_key);
-        public_key = malloc(data_length);
+        if (public_key) mender_storage_free(public_key);
+        public_key = mender_storage_malloc(data_length);
         if (NULL == public_key) {
             mender_log_error("Unable to allocate memory for public key");
             ret = MENDER_FAIL;
@@ -390,12 +425,12 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
         public_key_length = data_length;
     } else if (offset == MENDER_DEPLOYMENT_DATA_OFFSET) {
         // free deployment data and assign new data
-        if (deployment_data) free(deployment_data);
+        if (deployment_data) mender_storage_free(deployment_data);
         deployment_data = strdup((const char *)data);
         deployment_data_length = data_length;
     } else if (offset == MENDER_ARTIFACT_NAME_OFFSET) {
         // free artifact name and assign new data
-        if (artifact_name) free(artifact_name);
+        if (artifact_name) mender_storage_free(artifact_name);
         artifact_name = strdup((const char *)data);
         artifact_name_length = data_length;
     } else {
@@ -427,10 +462,10 @@ __mender_storage_update_data_to_flash(const struct flash_area *fa, off_t offset,
     }
 
 exit:
-    if (private_key) free(private_key);
-    if (public_key) free(public_key);
-    if (deployment_data) free(deployment_data);
-    if (artifact_name) free(artifact_name);
+    if (private_key) mender_storage_free(private_key);
+    if (public_key) mender_storage_free(public_key);
+    if (deployment_data) mender_storage_free(deployment_data);
+    if (artifact_name) mender_storage_free(artifact_name);
 
     return ret;
 }
