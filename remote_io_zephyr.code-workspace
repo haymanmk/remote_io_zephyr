@@ -1,0 +1,37 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../modules/ws2812-pwm"
+		},
+		{
+			"path": "../../.."
+		}
+	],
+    "settings": {
+        "files.associations": {
+            "stm32f7xx_remote_io.h": "c",
+            "settings.h": "c",
+            "error.h": "c",
+            "socket.h": "c",
+            "net_ip.h": "c",
+            "inet.h": "c",
+            "errno.h": "c",
+            "net_if.h": "c",
+            "socket_service.h": "c",
+            "ethernet_if.h": "c",
+            "api.h": "c",
+            "error_code.h": "c",
+            "cpu_map.h": "c",
+            "system_info.h": "c",
+            "socket_poll.h": "c",
+            "flash.h": "c",
+            "gpio.h": "c",
+            "led_strip.h": "c",
+            "ws28xx_pwm.h": "c",
+            "ws28xx_led.h": "c"
+        }
+    }
+}

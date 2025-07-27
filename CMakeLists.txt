@@ -25,7 +25,8 @@ file(GLOB_RECURSE app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
 
 # Generate Root CA include files
-generate_inc_file_for_target(app "src/inc/AmazonRootCA1.cer" "${ZEPHYR_BINARY_DIR}/include/generated/AmazonRootCA1.cer.inc")
+# generate_inc_file_for_target(app "src/inc/AmazonRootCA1.cer" "${ZEPHYR_BINARY_DIR}/include/generated/AmazonRootCA1.cer.inc")
+generate_inc_file_for_target(app "src/inc/ca-cert.crt" "${ZEPHYR_BINARY_DIR}/include/generated/T3-PDO-SBC-01.crt.inc")
 generate_inc_file_for_target(app "src/inc/gts-root-r4.pem" "${ZEPHYR_BINARY_DIR}/include/generated/gts-root-r4.pem.inc")
 
 if (CONFIG_MENDER_MCU_CLIENT)

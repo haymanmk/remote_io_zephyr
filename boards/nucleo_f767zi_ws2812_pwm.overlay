@@ -8,6 +8,7 @@
 };
 
 &timers3 {
+    status = "okay";
     pwm_tim3: pwm {
         pinctrl-0 = <&tim3_ch1_pa6>;
         pinctrl-names = "default";

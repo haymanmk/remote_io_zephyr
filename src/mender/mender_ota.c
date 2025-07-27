@@ -35,7 +35,9 @@ static mender_identity_t mender_identity = { .name = "mac", .value = mac_address
 
 #ifdef CONFIG_MENDER_NET_CA_CERTIFICATE_TAG_PRIMARY
 static const unsigned char ca_cert_primary[] = {
-    #include "AmazonRootCA1.cer.inc"
+    // #include "AmazonRootCA1.cer.inc"
+    #include "T3-PDO-SBC-01.crt.inc"
+    0x00
 };
 #endif // CONFIG_MENDER_NET_CA_CERTIFICATE_TAG_PRIMARY
 
