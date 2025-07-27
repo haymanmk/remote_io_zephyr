@@ -314,11 +314,12 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
         *data_length = 0; // set data length to 0
         return MENDER_NOT_FOUND;
     }
-    // check if data length is valid. if data length is larger than the flash area size, return error
+    // check if data length is valid. if data length is larger than the flash area size, return data not found
     if (*data_length > fa->fa_size - offset - len_size) {
         mender_log_error("Data length is larger than flash area size: %zu > %lu",
                          *data_length, fa->fa_size - offset - len_size);
-        return MENDER_FAIL;
+        *data_length = 0; // set data length to 0
+        return MENDER_NOT_FOUND;
     }
     // allocate memory for data
     if (NULL == (*data = mender_storage_malloc(*data_length))) {
