@@ -7,6 +7,10 @@
     status = "okay";
 };
 
+&tim3_ch1_pa6 {
+    bias-pull-down;
+};
+
 &timers3 {
     status = "okay";
     pwm_tim3: pwm {
