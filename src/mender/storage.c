@@ -246,6 +246,20 @@ mender_err_t mender_storage_get_artifact_name(const char **artifact_name)
         ret = MENDER_OK; // set return value to OK since we set the artifact name from the build
         mender_log_info("Artifact name not found in storage, using build artifact name: %s", *artifact_name);
 	}
+    else {
+        // Add null terminator to the artifact name
+        char *temp = mender_storage_malloc(artifact_name_length + 1);
+        if (NULL == temp) {
+            mender_log_error("Unable to allocate memory for artifact name");
+            mender_storage_free((void *)*artifact_name);
+            *artifact_name = NULL;
+            return MENDER_FAIL;
+        }
+        memcpy(temp, *artifact_name, artifact_name_length);
+        temp[artifact_name_length] = '\0';
+        mender_storage_free((void *)*artifact_name);
+        *artifact_name = temp;
+    }
 
 	// update cached artifact name
 	cached_artifact_name = (char *)*artifact_name;
@@ -296,7 +310,7 @@ __mender_storage_write_data_to_flash(const struct flash_area *fa, off_t offset, 
  * @param offset Offset in the flash area to start reading from
  * @param len_size Number of bytes to read for the length of the data
  * @param data Pointer to the pointer where the data will be stored
- * @param data_length Pointer to the size of the data read including a null terminator
+ * @param data_length Pointer to the size of the data read
  * @return MENDER_OK on success, MENDER_FAIL on failure, MENDER_NOT_FOUND if data is not available
  * @note This function reads the first `len_size` bytes to get the length of the data,
  *       then allocates memory for the data and reads it from the flash area.
@@ -313,7 +327,7 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
     }
     // check if data is empty
     if (mender_storage_is_empty((unsigned char *)&__data_length, len_size) ||
-        *data_length == 0) {
+        __data_length == 0) {
         mender_log_info("Data not available");
         *data_length = 0; // set data length to 0
         return MENDER_NOT_FOUND;
@@ -326,9 +340,7 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
         return MENDER_NOT_FOUND;
     }
     // allocate memory for data
-    // add null terminator for string data
-    *data_length = __data_length + 1;
-    if (NULL == (*data = mender_storage_malloc(*data_length))) {
+    if (NULL == (*data = mender_storage_malloc(__data_length))) {
         mender_log_error("Unable to allocate memory");
         return MENDER_FAIL;
     }
@@ -348,8 +360,6 @@ __mender_storage_read_data_from_flash(const struct flash_area *fa, off_t offset,
         return MENDER_NOT_FOUND;
     }
 
-    // add null terminator for string data
-    ((unsigned char *)(*data))[__data_length] = '\0';
     // update data length
     *data_length = __data_length;
 
