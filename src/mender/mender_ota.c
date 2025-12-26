@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(mender_ota, LOG_LEVEL_DBG);
 
 #include "ethernet_if.h"
 #include "storage.h"
+#include "cmake_config.h"
 
 void mender_ota_task(void *p1, void *p2, void *p3);
 
@@ -120,7 +121,8 @@ int mender_ota_init(void) {
 #endif // CONFIG_NET_SOCKETS_SOCKETS_TLS
 
     // prepare data for Mender OTA
-    char *device_type = CONFIG_BOARD; // use board name as device type
+    // char *device_type = CONFIG_BOARD; // use board name as device type
+    char *device_type = CMAKE_PROJECT_NAME; // use device type from cmake config
 
     // read MAC address
     struct net_if *iface = net_if_get_default();

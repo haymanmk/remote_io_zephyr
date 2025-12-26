@@ -32,3 +32,16 @@ generate_inc_file_for_target(app "src/inc/gts-root-r4.pem" "${ZEPHYR_BINARY_DIR}
 if (CONFIG_MENDER_MCU_CLIENT)
     zephyr_library_compile_definitions(-D_POSIX_C_SOURCE=200809L)  # Required for strdup and strtok_r support
 endif() # CONFIG_MENDER_MCU_CLIENT
+
+# Generate cmake_config.h file with project-specific settings which can be included in the source code
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/inc/cmake_config.h.in
+    ${ZEPHYR_BINARY_DIR}/include/generated/zephyr/cmake_config.h
+)
+
+# Generate build_artifact.sh from build_artifact.sh.in
+configure_file(
+    build_artifact.sh.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/build_artifact.sh
+    @ONLY
+)
