@@ -346,7 +346,9 @@ int tcp_server_init(void)
     struct net_if *iface = net_if_get_default();
     
     // Create a TCP socket
-    int sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    int sock;
+create_new_socket:
+    sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0) {
         LOG_ERR("Failed to create socket: %d", -errno);
         return -1;
@@ -363,7 +365,7 @@ int tcp_server_init(void)
         ret = zsock_setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt));
         if (ret < 0) {
             LOG_ERR("Cannot turn off IPV6_V6ONLY option: %d", -errno);
-            goto exit;
+            goto retry;
         } else {
             LOG_INF("IPV6_V6ONLY option is turned off");
         }
@@ -374,19 +376,19 @@ int tcp_server_init(void)
     ret = zsock_setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
     if (ret < 0) {
         LOG_ERR("Failed to set SO_KEEPALIVE option: %d", -errno);
-        goto exit;
+        goto retry;
     }
 
     // Bind the socket to the address
     if ((ret = zsock_bind(sock, (struct sockaddr *)&addr_ipv4, sizeof(addr_ipv4))) < 0 ) {
         LOG_ERR("Failed to bind socket: %d", -errno);
-        goto exit;
+        goto retry;
     }
 
     // Listen for incoming connections
     if ((ret = zsock_listen(sock, POLLABLE_SOCKETS)) < 0) {
         LOG_ERR("Failed to listen on socket: %d", -errno);
-        goto exit;
+        goto retry;
     }
 
     LOG_INF("Listening on %s:%d",
@@ -412,8 +414,14 @@ int tcp_server_init(void)
         int client = zsock_accept(sock, (struct sockaddr *)&client_addr, &addr_len);
         if (client < 0) {
             LOG_ERR("Failed to accept connection: %d", -errno);
-            continue;
+            goto retry;
         }
+
+        /**
+         * Test fatal error handler
+         */
+        // Uncomment the following line to test fatal error handler
+        // k_panic();
 
         counter++;
         inet_ntop(client_addr.sin_family, &client_addr.sin_addr, addr_str, sizeof(addr_str));
@@ -457,7 +465,6 @@ int tcp_server_init(void)
         }
     }
 
-exit:
     // unregister all clients at a socket service
     ret = unregister_all_clients_at_socket_service();
     if (ret < 0) {
@@ -469,6 +476,18 @@ exit:
         zsock_close(sock);
     }
     return ret;
+
+// Retry creating socket on failure
+retry:
+    if (sock >= 0) {
+        zsock_close(sock);
+    }
+    // Put this thread to sleep for a while before retrying
+    // to wait for resources to be freed after TIME_WAIT state.
+    // Without this delay, the socket creation may fail with
+    // EADDRINUSE error.
+    k_sleep(K_MSEC(CONFIG_NET_TCP_TIME_WAIT_DELAY));
+    goto create_new_socket;
 }
 
 static void reset_socket_service(ethernet_if_socket_service_t *service)

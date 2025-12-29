@@ -1,5 +1,7 @@
 #include <app_version.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
+#include <zephyr/sys/reboot.h>
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 #include "ethernet_if.h"
@@ -39,4 +41,20 @@ int main(void) {
     tcp_server_init();
 
     return 0;
+}
+
+/**
+ * @brief Fetal error handler
+ * @param reason Reason for the fatal error
+ * @param esf    Exception context. May be NULL.
+ * @return This function does not return
+ */
+void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf) {
+    LOG_ERR("Fatal error occurred! reason: %u, esf: %p", reason, esf);
+    LOG_ERR("System will reboot now.");
+    LOG_PANIC();
+    sys_reboot(SYS_REBOOT_WARM);
+    while (1) {
+        /* Wait for reboot */
+    }
 }
