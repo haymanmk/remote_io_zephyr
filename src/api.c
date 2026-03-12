@@ -1098,6 +1098,14 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
 
             token_t* token = command_line->token;
 
+            // Validate if baud rate is a standard one, i.e. 9600, 19200, 38400, 57600, 115200
+            if (token->i32 != 9600 && token->i32 != 19200
+                && token->i32 != 38400 && token->i32 != 57600
+                && token->i32 != 115200)
+            {
+                error_code = API_ERROR_CODE_INVALID_COMMAND_PARAMETER;
+                break;
+            }
             // write the baud rate
             settings.uart[command_line->variant].baudrate = (uint32_t)(token->i32);
 
