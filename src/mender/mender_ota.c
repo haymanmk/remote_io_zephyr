@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(mender_ota, LOG_LEVEL_DBG);
 #include "ethernet_if.h"
 #include "storage.h"
 #include "cmake_config.h"
+#include "system_info.h"
 
 void mender_ota_task(void *p1, void *p2, void *p3);
 
@@ -57,16 +58,42 @@ mender_err_t mender_network_connect_cb(void) {
 
 mender_err_t mender_network_release_cb(void) {
     LOG_DBG("network_release_cb");
+    // Update the system status to SYSTEM_STATUS_OK when current status is SYSTEM_STATUS_CHECKING_FOR_UPDATE or SYSTEM_STATUS_UPDATE_AVAILABLE
+    system_status_t current_status = system_info_get_status();
+    if (current_status == SYSTEM_STATUS_CHECKING_FOR_UPDATE || current_status == SYSTEM_STATUS_UPDATE_AVAILABLE) {
+        system_info_set_status(SYSTEM_STATUS_OK);
+    }
+
     return MENDER_OK;
 }
 
 mender_err_t mender_deployment_status_cb(mender_deployment_status_t status, const char *desc) {
     LOG_DBG("deployment_status_cb: %s", desc);
+    // Update the system status based on the deployment status
+    switch (status) {
+        case MENDER_DEPLOYMENT_STATUS_DOWNLOADING:
+            system_info_set_status(SYSTEM_STATUS_MENDER_DOWNLOADING);
+            break;
+        case MENDER_DEPLOYMENT_STATUS_INSTALLING:
+            system_info_set_status(SYSTEM_STATUS_MENDER_INSTALLING);
+            break;
+        case MENDER_DEPLOYMENT_STATUS_REBOOTING:
+            system_info_set_status(SYSTEM_STATUS_MENDER_REBOOTING);
+            break;
+        case MENDER_DEPLOYMENT_STATUS_SUCCESS:
+        case MENDER_DEPLOYMENT_STATUS_FAILURE:
+            system_info_set_status(SYSTEM_STATUS_OK);
+            break;
+        default:
+            break;
+    }
     return MENDER_OK;
 }
 
 mender_err_t mender_restart_cb(void) {
     LOG_DBG("restart_cb");
+
+    system_info_set_status(SYSTEM_STATUS_MENDER_REBOOTING);
 
     sys_reboot(SYS_REBOOT_WARM);
 

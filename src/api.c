@@ -528,8 +528,12 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
         // execute status command
         if (command_line->type == 'R')
         {
+            // get system status
+            system_status_t status = system_info_get_status();
+            // send the status to the client, format: "R<Service ID> <Status>"
+            service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_STATUS, status);
             // send default response
-            API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
+            // API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
         }
         else
         {
