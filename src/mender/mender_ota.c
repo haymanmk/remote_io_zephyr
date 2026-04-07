@@ -8,10 +8,17 @@ LOG_MODULE_REGISTER(mender_ota, LOG_LEVEL_DBG);
 #include <mender/client.h>
 #include <mender/zephyr-image-update-module.h>
 
+#include <zephyr/net/socket.h>
+
 #include "ethernet_if.h"
 #include "storage.h"
 #include "cmake_config.h"
 #include "system_info.h"
+
+/* Retry interval (seconds) between DNS probe attempts when the server is unreachable */
+#define MENDER_DNS_PROBE_INTERVAL_S   10
+/* Maximum number of DNS probe attempts before giving up and running offline */
+#define MENDER_DNS_PROBE_MAX_ATTEMPTS 6
 
 void mender_ota_task(void *p1, void *p2, void *p3);
 
@@ -109,6 +116,83 @@ mender_err_t mender_get_identity_cb(const mender_identity_t **identity) {
     return MENDER_FAIL;
 }
 
+/**
+ * @brief Extract the hostname from a URL string (strips scheme and any trailing path/port).
+ *        e.g. "https://pi-mender-stage.garmin.com" -> "pi-mender-stage.garmin.com"
+ *        The result is written into @p out_buf (null-terminated). Returns 0 on success.
+ */
+static int extract_hostname(const char *url, char *out_buf, size_t out_buf_len)
+{
+    const char *p = url;
+
+    /* Skip scheme (e.g. "https://") */
+    const char *scheme_end = strstr(p, "://");
+    if (scheme_end != NULL) {
+        p = scheme_end + 3;
+    }
+
+    /* Copy up to the first '/', ':', or end-of-string */
+    size_t i = 0;
+    while (*p != '\0' && *p != '/' && *p != ':' && i < out_buf_len - 1) {
+        out_buf[i++] = *p++;
+    }
+    out_buf[i] = '\0';
+
+    return (i > 0) ? 0 : -EINVAL;
+}
+
+/**
+ * @brief Probe whether the Mender server hostname is resolvable.
+ *
+ * Attempts a DNS lookup for the hostname extracted from CONFIG_MENDER_SERVER_HOST
+ * up to MENDER_DNS_PROBE_MAX_ATTEMPTS times, waiting MENDER_DNS_PROBE_INTERVAL_S
+ * seconds between each attempt. Stops as soon as the lookup succeeds or the
+ * attempt limit is reached, so the app can continue to run fully offline.
+ *
+ * @return true  if the hostname resolved within the allowed attempts.
+ * @return false if all attempts were exhausted (no internet / DNS unavailable).
+ */
+static bool wait_for_mender_server_reachable(void)
+{
+    char hostname[128];
+
+    if (extract_hostname(CONFIG_MENDER_SERVER_HOST, hostname, sizeof(hostname)) != 0) {
+        LOG_ERR("Failed to extract hostname from '%s'", CONFIG_MENDER_SERVER_HOST);
+        return false;
+    }
+
+    LOG_INF("Probing Mender server '%s' (max %d attempts, %d s interval)...",
+            hostname, MENDER_DNS_PROBE_MAX_ATTEMPTS, MENDER_DNS_PROBE_INTERVAL_S);
+
+    struct zsock_addrinfo hints = {
+        .ai_family   = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+    };
+
+    for (int attempt = 1; attempt <= MENDER_DNS_PROBE_MAX_ATTEMPTS; attempt++) {
+        struct zsock_addrinfo *res = NULL;
+        int rc = zsock_getaddrinfo(hostname, NULL, &hints, &res);
+        if (rc == 0) {
+            zsock_freeaddrinfo(res);
+            LOG_INF("Mender server '%s' is reachable (attempt %d/%d)",
+                    hostname, attempt, MENDER_DNS_PROBE_MAX_ATTEMPTS);
+            return true;
+        }
+        LOG_WRN("DNS probe %d/%d for '%s' failed (%s)%s",
+                attempt, MENDER_DNS_PROBE_MAX_ATTEMPTS, hostname,
+                zsock_gai_strerror(rc),
+                (attempt < MENDER_DNS_PROBE_MAX_ATTEMPTS) ? ", retrying..." : "");
+        if (attempt < MENDER_DNS_PROBE_MAX_ATTEMPTS) {
+            k_sleep(K_SECONDS(MENDER_DNS_PROBE_INTERVAL_S));
+        }
+    }
+
+    LOG_WRN("Mender server unreachable after %d attempts — running offline, OTA disabled",
+            MENDER_DNS_PROBE_MAX_ATTEMPTS);
+    return false;
+}
+
+
 int mender_ota_init(void) {
     LOG_DBG("Initializing Mender OTA...");
 
@@ -121,6 +205,14 @@ int mender_ota_init(void) {
     // wait for network.
     // when the network is ready, the network interface ip address is set.
     k_event_wait(&ethernet_if_events, ETHERNET_IF_EVENT_READY, false, K_FOREVER);
+
+    // Probe the Mender server hostname before initialising the client.
+    // If DNS does not resolve within the allowed attempts the device is
+    // considered offline and OTA is skipped, keeping the app fully responsive.
+    if (!wait_for_mender_server_reachable()) {
+        return MENDER_FAIL;
+    }
+
 
     mender_err_t ret = MENDER_OK;
 
@@ -189,20 +281,25 @@ END:
 void mender_ota_task(void *p1, void *p2, void *p3) {
     if (MENDER_OK != mender_ota_init()) {
         LOG_ERR("Failed to initialize Mender OTA");
-        return;
+        goto exit;
     }
 
 #ifdef CONFIG_MENDER_ZEPHYR_IMAGE_UPDATE_MODULE
     if (MENDER_OK != (mender_zephyr_image_register_update_module())) {
         /* error already logged */
-        return;
+        goto exit;
     }
 #endif /* CONFIG_MENDER_ZEPHYR_IMAGE_UPDATE_MODULE */
 
     // activate the mender client
     if (MENDER_OK != mender_client_activate()) {
         LOG_ERR("Failed to activate Mender client");
-        return;
+        goto exit;
     }
     LOG_INF("Mender OTA task started");
+
+exit:
+    // Update the system status to SYSTEM_STATUS_OK when exiting the OTA task (e.g. if activation failed),
+    // so the rest of the app can continue to run.
+    system_info_set_status(SYSTEM_STATUS_OK);
 }
