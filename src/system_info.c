@@ -34,3 +34,38 @@ void system_info_set_status(system_status_t status) {
     system_status = status;
     k_sem_give(&system_status_sem);
 }
+
+void system_info_status_code_to_string(system_status_t status, char *buffer, size_t buffer_size) {
+    const char *status_str;
+
+    switch (status) {
+        case SYSTEM_STATUS_OK:
+            status_str = "OK";
+            break;
+        case SYSTEM_STATUS_ERROR:
+            status_str = "ERROR";
+            break;
+        case SYSTEM_STATUS_CHECKING_FOR_UPDATE:
+            status_str = "CHECKING_FOR_UPDATE";
+            break;
+        case SYSTEM_STATUS_UPDATE_AVAILABLE:
+            status_str = "UPDATE_AVAILABLE";
+            break;
+        case SYSTEM_STATUS_UPDATING:
+            status_str = "UPDATING";
+            break;
+        case SYSTEM_STATUS_MENDER_DOWNLOADING:
+            status_str = "MENDER_DOWNLOADING";
+            break;
+        case SYSTEM_STATUS_MENDER_INSTALLING:
+            status_str = "MENDER_INSTALLING";
+            break;
+        case SYSTEM_STATUS_MENDER_REBOOTING:
+            status_str = "MENDER_REBOOTING";
+            break;
+        default:
+            status_str = "UNKNOWN";
+    }
+
+    snprintf(buffer, buffer_size, "%s", status_str);
+}

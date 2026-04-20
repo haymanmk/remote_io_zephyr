@@ -530,8 +530,11 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
         {
             // get system status
             system_status_t status = system_info_get_status();
+            // convert status code to string
+            char status_str[32] = {'\0'};
+            system_info_status_code_to_string(status, status_str, sizeof(status_str));
             // send the status to the client, format: "R<Service ID> <Status>"
-            service->response_cb(service->user_data, "R%d %d\r\n", SERVICE_ID_STATUS, status);
+            service->response_cb(service->user_data, "R%d %s\r\n", SERVICE_ID_STATUS, status_str);
             // send default response
             // API_DEFAULT_RESPONSE(service, command_line->type, command_line->id);
         }
@@ -845,6 +848,14 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
         // execute WS28XX LED command
         if (command_line->type == 'W')
         {
+            // Note: Not allowing to set LED color when system status is not in `SYSTEM_STATUS_OK`.
+            //       This is a workaround to avoid someone setting the LED without checking the return message.
+            //       During bootup, system has to connect to Mender server which may be compute-intensive and take a long time.
+            if (system_info_get_status() != SYSTEM_STATUS_OK)
+            {
+                error_code = API_ERROR_CODE_SYSTEM_NOT_READY;
+                break;
+            }
             // get the color of the LED
             token = token->next;
             if (token == NULL)

@@ -1,6 +1,9 @@
 #ifndef __SYSTEM_INFO_H
 #define __SYSTEM_INFO_H
 
+#include <stdint.h>
+#include <stddef.h>
+
 /**
  * @brief Enumeration for system status codes.
  */
@@ -23,5 +26,6 @@ typedef void (*system_info_callback_fn_t)(void *user_data, ...);
 void system_info_print(void *user_data, system_info_callback_fn_t cb);
 system_status_t system_info_get_status(void);
 void system_info_set_status(system_status_t status);
+void system_info_status_code_to_string(system_status_t status, char *buffer, size_t buffer_size);
 
 #endif
