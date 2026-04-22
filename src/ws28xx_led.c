@@ -1,7 +1,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(ws28xx_led_strip, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(ws28xx_led_strip, LOG_LEVEL_INF);
 
 #include <zephyr/drivers/led_strip.h>
 #include <zephyr/drivers/gpio.h>
