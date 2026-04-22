@@ -848,14 +848,6 @@ void api_execute_command(api_service_context_t *service, command_line_t *command
         // execute WS28XX LED command
         if (command_line->type == 'W')
         {
-            // Note: Not allowing to set LED color when system status is not in `SYSTEM_STATUS_OK`.
-            //       This is a workaround to avoid someone setting the LED without checking the return message.
-            //       During bootup, system has to connect to Mender server which may be compute-intensive and take a long time.
-            if (system_info_get_status() != SYSTEM_STATUS_OK)
-            {
-                error_code = API_ERROR_CODE_SYSTEM_NOT_READY;
-                break;
-            }
             // get the color of the LED
             token = token->next;
             if (token == NULL)
