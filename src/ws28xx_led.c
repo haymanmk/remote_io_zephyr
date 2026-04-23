@@ -9,7 +9,7 @@ LOG_MODULE_REGISTER(ws28xx_led_strip, LOG_LEVEL_INF);
 
 #define LED_STRIP_NODE DT_NODELABEL(led_strip)
 
-/* Maximum LED strip refresh interval in milliseconds (10 Hz) */
+/* Maximum LED strip refresh interval in milliseconds */
 #define LED_REFRESH_INTERVAL_MS 50
 
 #if DT_NODE_HAS_PROP(LED_STRIP_NODE, chain_length)
@@ -89,6 +89,13 @@ int ws28xx_led_set_color_all(uint8_t r, uint8_t g, uint8_t b)
     return 0;
 }
 
+/**
+ * @brief   Thread function for refreshing the LED strip. Waits for the led_pending_sem semaphore to be given,
+ *          then updates the LED strip with the current pixel colors.
+ *          Rate-limited to avoid overwhelming the LED strip.
+ * @param   p1, p2, p3 Unused parameters required by K_KERNEL_THREAD_DEFINE
+ * @return  Does not return
+ */
 static void led_refresh_task(void *p1, void *p2, void *p3)
 {
     ARG_UNUSED(p1);
