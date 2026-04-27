@@ -248,7 +248,7 @@ int uart_listener_callback_set(uart_index_t uart_index, uart_listen_callback_t c
     new_listener->user_data = user_data;
     new_listener->next = NULL;
     // add the listener to the head of the list
-    utils_append_node((utils_node_t *)new_listener, (utils_node_t *)&headListener[uart_index]);
+    utils_append_node((utils_node_t *)new_listener, (utils_node_t **)&headListener[uart_index]);
 
     return 0;
 }

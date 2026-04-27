@@ -252,7 +252,7 @@ void digital_input_subscribe(void *user_data, uint8_t index, digital_input_callb
 	// update its input state
 	newNode->state = digital_input_read(index);
     // append the new node to the end of the list
-    utils_append_node((utils_node_t *)newNode, (utils_node_t *)headNodeSubscribedInputs);
+    utils_append_node((utils_node_t *)newNode, (utils_node_t **)&headNodeSubscribedInputs);
 
 	// resume the task if it is suspended
 	k_thread_resume(digital_input_polling_task);

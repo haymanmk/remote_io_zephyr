@@ -181,18 +181,24 @@ io_status_t utils_free_node(utils_node_t *node)
     return STATUS_OK;
 }
 
-io_status_t utils_append_node(utils_node_t *node, utils_node_t *head)
+/**
+ * @brief Append a node to the end of the linked list.
+ * @param node: pointer to the node to be appended
+ * @param head: double-pointer to the head of the linked list
+ * @return STATUS_OK if the node is appended successfully, STATUS_FAIL otherwise
+ */
+io_status_t utils_append_node(utils_node_t *node, utils_node_t **head)
 {
     if (node == NULL) {
         return STATUS_FAIL;
     }
-    if (head == NULL) {
-        head = node;
+    if (*head == NULL) {
+        *head = node;
         node->next = NULL;
         return STATUS_OK;
     }
     // find the last node in the linked list
-    utils_node_t *current = head;
+    utils_node_t *current = *head;
     while (current->next != NULL) {
         current = current->next;
     }
@@ -205,23 +211,23 @@ io_status_t utils_append_node(utils_node_t *node, utils_node_t *head)
 /**
  * @brief Remove and free a node from the linked list.
  * @param node: pointer to the node to be removed
- * @param head: pointer to the head of the linked list
+ * @param head: double-pointer to the head of the linked list
  * @return STATUS_OK if the node is removed successfully, STATUS_FAIL otherwise
  */
-io_status_t utils_remove_node(utils_node_t *node, utils_node_t *head)
+io_status_t utils_remove_node(utils_node_t *node, utils_node_t **head)
 {
-    if (node == NULL || head == NULL) {
+    if (node == NULL || *head == NULL) {
         return STATUS_FAIL;
     }
     // check if the node is the head
-    if (head == node) {
-        head = head->next;
+    if (*head == node) {
+        *head = (*head)->next;
         free(node);
         node = NULL;
         return STATUS_OK;
     }
     // find the previous node
-    utils_node_t *current = head;
+    utils_node_t *current = *head;
     while (current->next != NULL && current->next != node) {
         current = current->next;
     }
